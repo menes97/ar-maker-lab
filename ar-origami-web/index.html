@@ -32,6 +32,59 @@
 <script type="importmap">
   { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
 </script>
+<style id="mobil">
+/* Telefon düzeni (genişlik ≤700px ya da yükseklik ≤500px, yatay telefon): üstte ince başlık şeridi, altta yana kayan tek satırlık şeritler.
+   Çalışma alanı aradaki boşluğu doldurur. Satır yüksekliği --row. */
+@media (max-width: 700px), (max-height: 500px) {
+  :root { --row: 54px; --safe: env(safe-area-inset-bottom, 0px); }
+  .hud {
+    left: 8px !important; right: 8px !important; top: 8px !important; width: auto !important; max-width: none !important;
+    padding: 6px 10px !important; border-radius: 10px !important;
+  }
+  .hud h1 { font-size: 14px !important; margin: 0 !important; }
+  .hud p.long { display: none !important; }
+  .hud p, .hud .step, .hud #progText { font-size: 12px !important; margin: 2px 0 0 !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hud .prog { margin-top: 4px !important; }
+
+  /* Alt şeritler: tek satır, yana kaydırılır */
+  .bar, .tools, #side, #opts {
+    position: fixed !important; left: 0 !important; right: 0 !important; top: auto !important;
+    transform: none !important; width: auto !important; max-width: none !important; height: var(--row);
+    display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: center !important;
+    justify-content: flex-start !important; gap: 6px !important;
+    overflow-x: auto !important; overflow-y: hidden !important; overscroll-behavior-x: contain;
+    padding: 6px 10px !important; border-radius: 0 !important; border-left: 0 !important; border-right: 0 !important;
+    scrollbar-width: none; -webkit-overflow-scrolling: touch;
+    -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent); mask-image: linear-gradient(90deg, #000 88%, transparent);
+  }
+  .bar::-webkit-scrollbar, .tools::-webkit-scrollbar, #side::-webkit-scrollbar, #opts::-webkit-scrollbar { display: none; }
+  .bar { bottom: 0 !important; height: calc(var(--row) + var(--safe)); padding-bottom: calc(6px + var(--safe)) !important; }
+  .tools, #side { bottom: calc(var(--row) + var(--safe)) !important; }
+  #opts { bottom: calc(2 * var(--row) + var(--safe)) !important; }
+
+  /* Şerit içindeki gruplar da tek satır */
+  .bar > *, .tools > *, #side > *, #opts > * { flex: 0 0 auto !important; }
+  .bar .group, .bar #palette, .bar #sizes, .tools .grp, #opts .grp, .tools .slot, .tools .chars, #patterns, #palette {
+    display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: center !important; gap: 6px !important;
+    margin: 0 !important; padding: 0 !important; border: 0 !important; background: none !important;
+  }
+  #patterns.hidden, #patGrp.hidden { display: none !important; }
+  .tools .slot h2 { margin: 0 4px 0 0 !important; font-size: 12px !important; white-space: nowrap; }
+  .tools .slot h2 small { display: none; }
+  .tools .slot + .slot { border-left: 1px solid rgba(255,255,255,.15) !important; padding-left: 8px !important; }
+
+  /* Dokunmaya uygun boyutlar */
+  .bar button, .tools button, #side button, #opts button { min-height: 40px !important; padding: 6px 11px !important; white-space: nowrap; }
+  .tools button small, #side button small { display: none !important; }
+  .swatch { width: 36px !important; height: 36px !important; min-height: 36px !important; padding: 0 !important; flex: 0 0 auto; }
+  .bar .sep { height: 26px !important; }
+  input[type=color] { width: 36px !important; height: 36px !important; flex: 0 0 auto; }
+  label.size, label.chk { white-space: nowrap; }
+  label.size input[type=range] { width: 90px; height: 32px !important; }
+  label.chk input[type=checkbox] { width: 22px !important; height: 22px !important; }
+  a[data-home-link] { display: inline-block; min-width: 34px; min-height: 34px; line-height: 34px; text-align: center; margin: -8px 0 -8px -8px !important; }
+}
+</style>
 </head>
 <body>
 <video id="video" playsinline muted></video>
