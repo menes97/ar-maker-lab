@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AR Maker Lab</title>
+<meta name="description" content="Elinle oynanan yedi tarayıcı atölyesi: çömlek, origami, ebru, yapı blokları, Karagöz, çini ve kilim." />
+<meta name="theme-color" content="#14110f" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✋</text></svg>" />
+<style>
+  :root {
+    --bg: #14110f; --bg2: #1f1915; --card: #231d18; --card-h: #2c241e; --line: rgba(255,240,220,.1);
+    --text: #f6efe6; --muted: #b8aa9a; --accent: #e3a04a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { min-height: 100vh; background: radial-gradient(ellipse at 50% -10%, #3a2c22 0%, var(--bg2) 35%, var(--bg) 75%); color: var(--text); font: 15px/1.5 system-ui, "Segoe UI", sans-serif; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 48px 16px 40px; }
+  header { text-align: center; margin-bottom: 36px; }
+  .mark { font-size: 44px; line-height: 1; }
+  h1 { margin: 10px 0 8px; font-size: clamp(30px, 5vw, 46px); letter-spacing: -.01em; }
+  header p { margin: 0 auto; max-width: 620px; color: var(--muted); font-size: 16px; }
+  .how { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin: 22px 0 0; padding: 0; list-style: none; }
+  .how li { padding: 7px 12px; border: 1px solid var(--line); border-radius: 999px; background: rgba(255,255,255,.03); color: var(--muted); font-size: 13.5px; }
+  .how b { color: var(--text); font-weight: 600; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); margin: 34px 0 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+  a.card { display: flex; flex-direction: column; gap: 6px; padding: 18px 18px 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--card); color: inherit; text-decoration: none; transition: transform .15s, background .15s, border-color .15s; position: relative; overflow: hidden; }
+  a.card::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--c, var(--accent)); opacity: .85; }
+  a.card:hover, a.card:focus-visible { background: var(--card-h); transform: translateY(-2px); border-color: rgba(255,240,220,.2); outline: none; }
+  .emoji { font-size: 32px; line-height: 1.1; }
+  .card h3 { margin: 4px 0 0; font-size: 18px; }
+  .card p { margin: 0; color: var(--muted); font-size: 14px; flex: 1; }
+  .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .tags span { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: rgba(255,255,255,.06); color: var(--muted); }
+  .go { margin-top: 10px; font-size: 13.5px; font-weight: 600; color: var(--c, var(--accent)); }
+  footer { margin-top: 40px; text-align: center; color: var(--muted); font-size: 13px; }
+  footer p { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="mark">✋</div>
+    <h1>AR Maker Lab</h1>
+    <p>Kamerana elini göster, havada üret. Yedi atölye, kurulum yok: tarayıcıda açılır, telefonda ve bilgisayarda çalışır.</p>
+    <ul class="how">
+      <li>🤏 <b>Pinch</b> = tut / dokun</li>
+      <li>📷 <b>Kamera</b> düğmesiyle el takibini aç</li>
+      <li>🖱️ Kamera yoksa <b>fare</b> ya da dokunmatik</li>
+    </ul>
+  </header>
+
+  <h2>Türk el sanatları</h2>
+  <div class="grid">
+    <a class="card" href="./ar-ebru-web/" style="--c:#2f8f9d">
+      <div class="emoji">🎨</div><h3>Ebru Atölyesi</h3>
+      <p>Fırçayla boya serp, bizle çek, tarakla tara, lale yap. Desenini kâğıda al.</p>
+      <div class="tags"><span>5 alet</span><span>geleneksel boyalar</span></div>
+      <div class="go">Atölyeye gir →</div>
+    </a>
+    <a class="card" href="./ar-karagoz-web/" style="--c:#d9873a">
+      <div class="emoji">🎭</div><h3>Karagöz Sahnesi</h3>
+      <p>İki elinle iki tasvir oynat; elini uzaklaştır, gölge bulanıklaşsın. Oyununu videoya kaydet.</p>
+      <div class="tags"><span>4 karakter</span><span>video kaydı</span></div>
+      <div class="go">Perdeyi aç →</div>
+    </a>
+    <a class="card" href="./ar-cini-web/" style="--c:#2c5fb3">
+      <div class="emoji">🔷</div><h3>Çini Atölyesi</h3>
+      <p>Simetrik karoda tahrir çek, lale ve karanfil damgala, İznik renkleriyle boya, sırla ve fırınla.</p>
+      <div class="tags"><span>simetri</span><span>3 şablon</span><span>pano</span></div>
+      <div class="go">Karoya başla →</div>
+    </a>
+    <a class="card" href="./ar-kilim-web/" style="--c:#b2382c">
+      <div class="emoji">🧶</div><h3>Kilim Tezgâhı</h3>
+      <p>Mekiği çözgülerin arasından geçir, kirkitle sıkıştır. Elibelinde, koçboynuzu, göz motifleri.</p>
+      <div class="tags"><span>7 motif</span><span>kök boya</span></div>
+      <div class="go">Tezgâha otur →</div>
+    </a>
+  </div>
+
+  <h2>Yap ve şekillendir</h2>
+  <div class="grid">
+    <a class="card" href="./ar-pottery-web/" style="--c:#b5714a">
+      <div class="emoji">🏺</div><h3>Çömlek Çarkı</h3>
+      <p>Dönen kili parmağınla bastır, pinch ile çek, tepeden uzat. Vazonu fotoğrafla.</p>
+      <div class="tags"><span>3B</span><span>gerçek zamanlı kil</span></div>
+      <div class="go">Çarkı döndür →</div>
+    </a>
+    <a class="card" href="./ar-origami-web/" style="--c:#e9524a">
+      <div class="emoji">📄</div><h3>Origami: Kâğıt Uçak</h3>
+      <p>On adımda kâğıdı katla, kanatları aç, uçağını fırlat.</p>
+      <div class="tags"><span>3B katlama</span><span>adım adım</span></div>
+      <div class="go">Katlamaya başla →</div>
+    </a>
+    <a class="card" href="./ar-brick-web/" style="--c:#f2b233">
+      <div class="emoji">🧱</div><h3>Yapı Blokları</h3>
+      <p>Tabana parça koy, üst üste diz, boya, sil. Sahneyi elinle döndür.</p>
+      <div class="tags"><span>7 boy</span><span>10 renk</span></div>
+      <div class="go">İnşaata başla →</div>
+    </a>
+  </div>
+
+  <footer>
+    <p>El takibi cihazında çalışır; kamera görüntüsü hiçbir yere gönderilmez.</p>
+    <p>En iyi deneyim için iyi ışık ve elinin tamamının göründüğü bir mesafe.</p>
+  </footer>
+</div>
+</body>
+</html>

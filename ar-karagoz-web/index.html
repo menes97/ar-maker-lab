@@ -1,0 +1,956 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AR Karagöz Sahnesi</title>
+<style>
+  :root { --panel: rgba(20, 14, 10, 0.78); --line: rgba(255,255,255,.13); --text: #f5efe4; --muted: #bdb3a6; --accent: #b5532a; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: radial-gradient(ellipse at 50% 35%, #2a1d14, #070504); color: var(--text); font: 14px/1.4 system-ui, "Segoe UI", sans-serif; }
+  #video { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); opacity: 0; transition: opacity .4s; }
+  #video.on { opacity: .32; }
+  #stage { position: fixed; border-radius: 6px; box-shadow: 0 0 0 2px #120a05, 0 22px 70px rgba(0,0,0,.75); touch-action: none; cursor: grab; }
+  #stage:active { cursor: grabbing; }
+  #overlay { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .hud { position: fixed; left: 16px; top: 16px; width: min(360px, calc(100vw - 32px)); padding: 10px 13px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; backdrop-filter: blur(8px); }
+  .hud h1 { margin: 0 0 4px; font-size: 16px; }
+  .hud p { margin: 3px 0 0; color: var(--muted); font-size: 12.5px; }
+  #status { color: var(--text); }
+  .tools { position: fixed; right: 16px; top: 16px; display: flex; flex-direction: column; gap: 8px; padding: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; backdrop-filter: blur(8px); width: 210px; }
+  .tools button, .bar button { border: 1px solid var(--line); background: rgba(255,255,255,.06); color: var(--text); padding: 8px 11px; border-radius: 10px; font: inherit; cursor: pointer; text-align: left; white-space: nowrap; }
+  .tools button.on { background: var(--accent); border-color: transparent; font-weight: 600; }
+  .slot { display: flex; flex-direction: column; gap: 5px; padding: 7px; border-radius: 11px; border: 1px solid transparent; }
+  .slot.sel { border-color: rgba(240,160,64,.55); background: rgba(181,83,42,.13); }
+  .slot h2 { margin: 0 0 1px; font-size: 12.5px; color: var(--muted); font-weight: 600; }
+  .slot h2 b { color: var(--text); }
+  .chars { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+  .tools .chars button { padding: 6px 7px; font-size: 12.5px; text-align: center; }
+  .tools button.flip { text-align: center; font-size: 12.5px; padding: 6px 8px; }
+  .bar { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; padding: 8px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; backdrop-filter: blur(8px); max-width: calc(100vw - 32px); }
+  .bar button.on { background: var(--accent); border-color: transparent; }
+  .bar button.rec-on { background: #b3261e; border-color: transparent; font-weight: 600; }
+  .sep { width: 1px; height: 26px; background: var(--line); }
+  label.chk { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; cursor: pointer; padding: 6px 4px; }
+  label.chk input { accent-color: var(--accent); width: 16px; height: 16px; }
+  #btnOpen { position: fixed; transform: translate(-50%, -50%); padding: 12px 22px; font: 600 17px/1.2 Georgia, "Times New Roman", serif; color: #fff4dc; background: linear-gradient(#8a3a1c, #5e2410); border: 2px solid #d9a352; border-radius: 30px; box-shadow: 0 8px 26px rgba(0,0,0,.55); cursor: pointer; z-index: 3; }
+  #btnOpen:hover { filter: brightness(1.12); }
+  #btnOpen.hidden { display: none; }
+  .rec { position: fixed; display: none; align-items: center; gap: 7px; padding: 5px 11px; border-radius: 20px; background: rgba(20,4,4,.82); border: 1px solid rgba(255,80,80,.5); color: #ffd9d6; font: 600 13px/1 system-ui, sans-serif; letter-spacing: .5px; z-index: 4; pointer-events: none; }
+  .rec.on { display: flex; }
+  .rec i { width: 11px; height: 11px; border-radius: 50%; background: #ff3b30; animation: blink 1s steps(2, start) infinite; }
+  @keyframes blink { to { visibility: hidden; } }
+  @media (max-width: 1000px) {
+    .hud p.long { display: none; }
+    .tools { top: auto; bottom: 120px; flex-direction: row; flex-wrap: wrap; justify-content: center; right: 50%; transform: translateX(50%); width: auto; max-width: calc(100vw - 32px); gap: 4px; padding: 6px; }
+    .slot { flex-direction: row; align-items: center; flex-wrap: wrap; padding: 4px; }
+    .chars { grid-template-columns: repeat(4, auto); }
+    .slot h2 small { display: none; }
+  }
+</style>
+</head>
+<body>
+<video id="video" playsinline muted></video>
+<canvas id="stage"></canvas>
+<canvas id="overlay"></canvas>
+<button id="btnOpen">🎭 Perde açılsın</button>
+<div class="rec" id="rec"><i></i> REC <span id="recTime">00:00</span></div>
+
+<div class="hud">
+  <h1><a href="../" data-home-link title="Tüm atölyeler" style="color:inherit;text-decoration:none;opacity:.7;margin-right:6px;font-weight:400">←</a>🎭 AR Karagöz Sahnesi</h1>
+  <p id="status">Göstermelik perdede. “Perde açılsın” de, oyun başlasın.</p>
+  <p class="long">✋ Sol el 1. tasviri, sağ el 2. tasviri oynatır (tek elde seçili tasvir). 🤏 Pinch = hareket (kafa atma, kol sallama…). Eli kameraya yaklaştır = tasvir perdeye yapışır, net; uzaklaştır = gölge büyür, bulanıklaşır. 🖱️ Fare: sürükle, tıkla = hareket, tekerlek = uzaklık. Kısayol: Boşluk hareket, F çevir, Tab seçim.</p>
+</div>
+
+<div class="tools" id="tools"></div>
+
+<div class="bar" id="bar">
+  <button id="btnProps">🏠 Dekor</button>
+  <button id="btnIntro">🖼️ Göstermelik</button>
+  <span class="sep"></span>
+  <label class="chk" title="Kayda mikrofon sesini de ekle"><input type="checkbox" id="mic" /> 🎙️ Mikrofon</label>
+  <button id="btnRec">⏺ Kaydet</button>
+  <span class="sep"></span>
+  <button id="btnCam">📷 Kamera</button>
+</div>
+
+<script type="module">
+// ---------------------------------------------------------------------------
+// Karagöz perdesi: ışıklı perde (Canvas 2D), deri tasvirler (eklemli, renkli,
+// yarı saydam, delikli), el ile oynatma, kayıt.
+// ---------------------------------------------------------------------------
+const SW = 1280, SH = 760, F = 36;            // sahne ve çerçeve kalınlığı
+const CW = SW - 2 * F, CH = SH - 2 * F;       // perde (ayna) alanı
+const TAU = Math.PI * 2;
+const stage = document.getElementById("stage");
+const ctx = stage.getContext("2d");
+stage.width = SW; stage.height = SH;
+const overlay = document.getElementById("overlay");
+const octx = overlay.getContext("2d");
+const video = document.getElementById("video");
+const statusEl = document.getElementById("status");
+const setStatus = (t) => (statusEl.textContent = t);
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const FILTER_OK = typeof ctx.filter === "string";
+
+// Tekrarlanabilir rastgele sayı (dekor/doku hep aynı çıksın)
+function mulberry32(a) { return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const rand = mulberry32(1453);
+
+// ---------------------------------------------------------------------------
+// Çizim yardımcıları: deri parça, zımba deliği, perçin
+// ---------------------------------------------------------------------------
+const INK = "rgba(34,18,8,0.9)";
+const SKIN = "rgba(228,162,106,0.6)";
+function shape(g, build, fill, lw = 3, stroke = INK) {
+  g.beginPath(); build();
+  if (fill) { g.fillStyle = fill; g.fill(); }
+  if (lw) { g.lineWidth = lw; g.strokeStyle = stroke; g.stroke(); }
+}
+/** Deriye zımba: delikten perdenin ışığı geçer (gerçekten saydam). */
+function punch(g, pts) {
+  if (!pts.length) return;
+  g.save(); g.globalCompositeOperation = "destination-out"; g.fillStyle = "#000"; g.beginPath();
+  for (const [x, y, r] of pts) { g.moveTo(x + r, y); g.arc(x, y, r, 0, TAU); }
+  g.fill(); g.restore();
+}
+const rosette = (x, y, R, r) => { const o = [[x, y, r * 1.15]]; for (let i = 0; i < 6; i++) { const a = (i / 6) * TAU; o.push([x + Math.cos(a) * R, y + Math.sin(a) * R, r]); } return o; };
+const dots = (x0, y0, x1, y1, n, r) => Array.from({ length: n }, (_, i) => { const t = n === 1 ? 0.5 : i / (n - 1); return [x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, r]; });
+function rivet(g, x, y) { g.beginPath(); g.arc(x, y, 4.5, 0, TAU); g.fillStyle = "rgba(60,30,12,0.88)"; g.fill(); }
+/** Eklem: parça (x,y) pivotunda döner; üstüne düğüm/perçin. */
+function joint(g, x, y, ang, fn) { g.save(); g.translate(x, y); g.rotate(ang); fn(); g.restore(); rivet(g, x, y); }
+function band(g, x0, x1, y0, y1, col) { shape(g, () => g.rect(x0, y0, x1 - x0, y1 - y0), col, 2); }
+function bez(p0, p1, p2, p3, t) { const u = 1 - t; return [0, 1].map((k) => u * u * u * p0[k] + 3 * u * u * t * p1[k] + 3 * u * t * t * p2[k] + t * t * t * p3[k]); }
+
+// Ortak parçalar (sağa bakan tasvir; (0,0) = çubuk deliği civarı, göğüs)
+function salvar(g, col) {
+  shape(g, () => {
+    g.moveTo(-40, 34);
+    g.bezierCurveTo(-72, 80, -66, 148, -34, 166);
+    g.lineTo(-16, 166);
+    g.quadraticCurveTo(-8, 128, 4, 126);
+    g.quadraticCurveTo(16, 138, 18, 166);
+    g.lineTo(36, 166);
+    g.bezierCurveTo(66, 140, 62, 80, 44, 34);
+    g.closePath();
+  }, col);
+  punch(g, [...rosette(-36, 104, 9, 3), ...rosette(34, 104, 9, 3), ...dots(-50, 150, -24, 157, 4, 2.2), ...dots(22, 157, 48, 150, 4, 2.2)]);
+}
+function shoe(g, x, col = "rgba(40,24,14,0.82)") {
+  shape(g, () => { g.moveTo(x, 164); g.lineTo(x - 2, 182); g.lineTo(x + 40, 184); g.quadraticCurveTo(x + 49, 178, x + 42, 172); g.lineTo(x + 24, 164); g.closePath(); }, col, 2);
+}
+function torso(g, xl, xr, top, bot, flare, col) {
+  shape(g, () => {
+    g.moveTo(xl + 12, top);
+    g.quadraticCurveTo(xl - 4, (top + bot) / 2, xl - flare, bot);
+    g.lineTo(xr + flare, bot);
+    g.quadraticCurveTo(xr + 4, (top + bot) / 2, xr - 12, top);
+    g.quadraticCurveTo((xl + xr) / 2, top - 12, xl + 12, top);
+    g.closePath();
+  }, col);
+}
+function arm(g, { len = 100, w = 11, sleeve, cuff, skin = SKIN }) {
+  shape(g, () => { g.moveTo(-w, -8); g.quadraticCurveTo(0, -16, w, -8); g.lineTo(w + 2, len * 0.72); g.lineTo(w - 2, len); g.lineTo(-w + 2, len); g.lineTo(-w - 2, len * 0.72); g.closePath(); }, sleeve);
+  band(g, -w - 2, w + 2, len * 0.7, len * 0.8, cuff);
+  punch(g, dots(0, 6, 0, len * 0.6, 4, 2.4));
+  shape(g, () => g.arc(1, len + 9, 10, 0, TAU), skin, 2);
+}
+function ear(g, x, y) { shape(g, () => g.ellipse(x, y, 6, 8, 0, 0, TAU), SKIN, 2); punch(g, [[x, y, 2.2]]); }
+/** Çubuk deliği: tasvir bu delikten perdeye dik tutulan çubukla oynatılır. */
+function stickHole(g) { punch(g, [[-6, -8, 6]]); shape(g, () => g.arc(-6, -8, 9, 0, TAU), null, 2.5, "rgba(50,26,10,0.8)"); }
+
+const ease = (t) => t * t * (3 - 2 * t);
+function keyframes(t, ks) {
+  for (let i = 1; i < ks.length; i++) if (t <= ks[i][0]) { const [t0, v0] = ks[i - 1], [t1, v1] = ks[i]; return v0 + (v1 - v0) * ease((t - t0) / (t1 - t0 || 1)); }
+  return ks[ks.length - 1][1];
+}
+
+// ---------------------------------------------------------------------------
+// Tasvirler. draw(g, pose): pose = { arm, head, headDx, time }
+// ---------------------------------------------------------------------------
+const CHARACTERS = {
+  karagoz: {
+    name: "Karagöz", restArm: 0.15,
+    acts: [
+      { verb: "kafa attı!", sfx: "Pat!", dur: 0.6, hitT: 0.5 },
+      { verb: "kol salladı!", sfx: "Şak!", dur: 0.7, hitT: 0.5 },
+    ],
+    action(t, v) { const e = Math.sin(Math.PI * t); return v % 2 === 0 ? { head: 0.6 * e, headDx: 10 * e, lunge: 32 * e } : { arm: -2.6 * e, lunge: 8 * e }; },
+    draw(g, p) {
+      salvar(g, "rgba(182,44,34,0.66)"); shoe(g, -38); shoe(g, 14);
+      torso(g, -40, 44, -64, 44, 6, "rgba(218,164,40,0.68)");
+      band(g, -46, 50, 26, 42, "rgba(60,110,70,0.72)");
+      punch(g, [...dots(30, -46, 34, 18, 6, 2.6), ...rosette(-20, -30, 10, 3.2), ...dots(-38, 34, 44, 34, 9, 1.8)]);
+      stickHole(g);
+      joint(g, 6, -66, p.head, () => {
+        g.translate(p.headDx, 0);
+        shape(g, () => g.ellipse(8, -36, 30, 33, 0, 0, TAU), SKIN);
+        ear(g, -8, -34);
+        shape(g, () => { g.moveTo(34, -48); g.quadraticCurveTo(54, -38, 36, -27); }, SKIN, 3);
+        shape(g, () => g.arc(16, -9, 21, 0, TAU), "rgba(22,12,6,0.9)");          // yuvarlak siyah sakal
+        punch(g, [[18, -44, 8.5]]);                                                 // iri yuvarlak göz
+        shape(g, () => g.arc(18, -44, 11, 0, TAU), null, 2.5);
+        shape(g, () => g.arc(21, -44, 3.8, 0, TAU), INK, 0);
+        shape(g, () => { g.moveTo(-18, -72); g.quadraticCurveTo(-30, -122, -14, -140); g.quadraticCurveTo(4, -152, 16, -132); g.quadraticCurveTo(28, -104, 28, -72); g.closePath(); }, "rgba(196,48,44,0.68)"); // uzun külah
+        punch(g, [...dots(5, -82, 1, -132, 5, 2.4), ...dots(-14, -96, -11, -124, 3, 1.8)]);
+        shape(g, () => g.ellipse(6, -66, 33, 9, 0, 0, TAU), "rgba(120,24,30,0.78)"); // şapka kenarı
+        punch(g, dots(-20, -66, 32, -66, 7, 1.8));
+      });
+      joint(g, 22, -54, p.arm, () => arm(g, { len: 100, w: 11, sleeve: "rgba(218,164,40,0.66)", cuff: "rgba(182,44,34,0.72)" }));
+    },
+  },
+  hacivat: {
+    name: "Hacivat", restArm: 0.1,
+    acts: [{ verb: "selam verdi: “Ah, efendim…”", sfx: null, dur: 0.9 }],
+    action(t) { const e = Math.sin(Math.PI * t), h = Math.sqrt(Math.max(0, e)); return { arm: -1.9 * h, head: 0.2 * e }; },
+    draw(g, p) {
+      shoe(g, -40); shoe(g, 12);
+      shape(g, () => { g.moveTo(-28, -64); g.quadraticCurveTo(-50, 40, -58, 172); g.lineTo(56, 172); g.quadraticCurveTo(48, 40, 30, -64); g.quadraticCurveTo(0, -76, -28, -64); g.closePath(); }, "rgba(48,86,168,0.62)"); // cübbe
+      shape(g, () => { g.moveTo(12, -58); g.lineTo(26, -62); g.quadraticCurveTo(40, 40, 46, 170); g.lineTo(26, 170); g.quadraticCurveTo(22, 40, 12, -58); g.closePath(); }, "rgba(64,140,86,0.64)");
+      band(g, -46, 46, 20, 34, "rgba(206,152,50,0.72)");
+      punch(g, [...dots(-52, 158, 50, 158, 12, 2.4), ...rosette(-26, 84, 10, 3.2), ...rosette(-18, -24, 9, 3), ...dots(22, -40, 35, 150, 9, 2), ...dots(-40, 27, 40, 27, 8, 1.7)]);
+      stickHole(g);
+      joint(g, 6, -66, p.head, () => {
+        g.translate(p.headDx, 0);
+        shape(g, () => g.ellipse(8, -34, 26, 32, 0, 0, TAU), SKIN);
+        ear(g, -6, -32);
+        shape(g, () => { g.moveTo(31, -46); g.quadraticCurveTo(50, -34, 31, -26); }, SKIN, 3);
+        shape(g, () => { g.moveTo(-4, -18); g.quadraticCurveTo(16, -6, 34, -22); g.quadraticCurveTo(30, 4, 18, 32); g.quadraticCurveTo(6, 6, -4, -18); g.closePath(); }, "rgba(40,26,16,0.86)"); // sivri sakal
+        punch(g, [[18, -42, 5]]);
+        shape(g, () => g.arc(19.5, -42, 2.4, 0, TAU), INK, 0);
+        shape(g, () => { g.moveTo(9, -52); g.quadraticCurveTo(19, -56, 28, -50); }, null, 3);
+        shape(g, () => { g.moveTo(-14, -84); g.lineTo(-10, -152); g.quadraticCurveTo(8, -170, 24, -152); g.lineTo(26, -84); g.closePath(); }, "rgba(58,130,80,0.66)"); // uzun kavuk
+        punch(g, [...dots(7, -98, 8, -150, 5, 2.2)]);
+        shape(g, () => g.ellipse(5, -72, 37, 19, 0, 0, TAU), "rgba(244,232,206,0.62)"); // sarık
+        punch(g, [...dots(-26, -74, 34, -74, 8, 2.1), ...dots(-20, -62, 28, -62, 6, 1.6)]);
+      });
+      joint(g, 22, -54, p.arm, () => arm(g, { len: 98, w: 14, sleeve: "rgba(48,86,168,0.6)", cuff: "rgba(206,152,50,0.72)" }));
+    },
+  },
+  zenne: {
+    name: "Zenne", restArm: 0.1,
+    acts: [{ verb: "mendil salladı.", sfx: null, dur: 1.0 }],
+    action(t) { const e = Math.sin(Math.PI * t), h = Math.sqrt(Math.max(0, e)); return { arm: (-2.3 + 0.35 * Math.sin(t * Math.PI * 8)) * h, hop: -12 * e, head: -0.12 * e }; },
+    draw(g, p) {
+      const fl = Math.sin(p.time * 2.2) * 4;
+      shoe(g, 20, "rgba(150,40,90,0.8)");
+      shape(g, () => { g.moveTo(-22, -60); g.quadraticCurveTo(-38, -6, -30, 36); g.quadraticCurveTo(-66, 110, -80, 176); g.lineTo(74, 176); g.quadraticCurveTo(60, 110, 30, 36); g.quadraticCurveTo(36, -6, 22, -60); g.quadraticCurveTo(0, -70, -22, -60); g.closePath(); }, "rgba(200,58,120,0.6)"); // uzun entari
+      band(g, -32, 34, 26, 40, "rgba(232,178,58,0.72)");
+      punch(g, [...dots(-74, 164, 68, 164, 14, 2.2), ...dots(-62, 148, 56, 148, 12, 1.7), ...rosette(-34, 104, 10, 3), ...rosette(30, 104, 10, 3), ...rosette(-2, 70, 8, 2.6), ...dots(-16, -54, 16, -54, 5, 1.7), ...dots(-28, 33, 30, 33, 8, 1.6)]);
+      stickHole(g);
+      joint(g, 4, -62, p.head, () => {
+        g.translate(p.headDx, 0);
+        shape(g, () => { g.moveTo(-28, -118); g.quadraticCurveTo(-70 + fl, -70, -58 + fl, 22); g.lineTo(-40 + fl, 18); g.quadraticCurveTo(-50, -60, -14, -112); g.closePath(); }, "rgba(246,226,240,0.42)", 2); // duvak
+        punch(g, dots(-44 + fl * 0.3, -70, -50 + fl, 6, 5, 2));
+        shape(g, () => { g.moveTo(-10, -56); g.quadraticCurveTo(-42, -30, -30, 30); g.lineTo(-16, 26); g.quadraticCurveTo(-24, -18, 0, -44); g.closePath(); }, "rgba(30,16,10,0.78)"); // uzun saç
+        shape(g, () => g.ellipse(6, -32, 22, 27, 0, 0, TAU), SKIN);
+        shape(g, () => { g.moveTo(26, -40); g.quadraticCurveTo(36, -31, 26, -25); }, SKIN, 2.5);
+        punch(g, [[16, -38, 4]]);
+        shape(g, () => g.arc(17, -38, 1.8, 0, TAU), INK, 0);
+        shape(g, () => { g.moveTo(10, -44); g.quadraticCurveTo(17, -47, 23, -43); }, null, 2);
+        shape(g, () => g.arc(23, -16, 2.6, 0, TAU), "rgba(190,30,50,0.85)", 0);
+        shape(g, () => g.arc(-2, -10, 3, 0, TAU), "rgba(230,190,60,0.85)", 1.5);  // küpe
+        shape(g, () => { g.moveTo(-16, -52); g.lineTo(-30, -122); g.quadraticCurveTo(-14, -134, 2, -124); g.lineTo(24, -52); g.quadraticCurveTo(4, -62, -16, -52); g.closePath(); }, "rgba(118,58,162,0.64)"); // hotoz
+        punch(g, [...rosette(-8, -92, 7, 2.2), ...dots(-12, -57, 16, -57, 5, 1.6), ...dots(-18, -116, -2, -118, 3, 1.6)]);
+      });
+      joint(g, 18, -50, p.arm, () => {
+        arm(g, { len: 88, w: 9, sleeve: "rgba(232,178,58,0.6)", cuff: "rgba(200,58,120,0.7)" });
+        shape(g, () => { g.moveTo(0, 104); g.lineTo(22 + fl, 112); g.lineTo(16 + fl, 136); g.lineTo(-4, 124); g.closePath(); }, "rgba(250,240,220,0.5)", 2); // mendil
+        punch(g, [[9 + fl * 0.5, 120, 2.2]]);
+      });
+    },
+  },
+  bekir: {
+    name: "Tuzsuz Deli Bekir", restArm: -0.9,
+    acts: [{ verb: "palasını savurdu!", sfx: "Hart!", dur: 0.9, hitT: 0.5 }],
+    action(t) {
+      const lunge = t > 0.3 && t < 0.7 ? 22 * Math.sin((Math.PI * (t - 0.3)) / 0.4) : 0;
+      return { arm: keyframes(t, [[0, 0], [0.35, -2.3], [0.55, 0.8], [1, 0]]), head: keyframes(t, [[0, 0], [0.35, -0.12], [0.55, 0.18], [1, 0]]), lunge };
+    },
+    draw(g, p) {
+      salvar(g, "rgba(44,82,150,0.64)"); shoe(g, -38, "rgba(120,30,24,0.82)"); shoe(g, 14, "rgba(120,30,24,0.82)");
+      torso(g, -46, 50, -64, 44, 8, "rgba(226,206,160,0.58)");
+      shape(g, () => { g.moveTo(-34, -64); g.quadraticCurveTo(-52, -10, -54, 44); g.lineTo(14, 44); g.quadraticCurveTo(18, -10, 12, -66); g.quadraticCurveTo(-12, -72, -34, -64); g.closePath(); }, "rgba(136,36,34,0.7)"); // yelek
+      band(g, -56, 60, 14, 46, "rgba(200,120,40,0.7)"); // kuşak
+      punch(g, [...rosette(-28, -30, 10, 3), ...dots(10, -58, 13, 6, 6, 2), ...dots(-50, 22, 54, 22, 11, 1.8), ...dots(-50, 38, 54, 38, 11, 1.8)]);
+      stickHole(g);
+      joint(g, 6, -68, p.head, () => {
+        g.translate(p.headDx, 0);
+        shape(g, () => g.ellipse(8, -36, 30, 32, 0, 0, TAU), SKIN);
+        ear(g, -8, -34);
+        shape(g, () => { g.moveTo(34, -50); g.quadraticCurveTo(60, -36, 36, -25); }, SKIN, 3);
+        punch(g, [[20, -45, 6]]);
+        shape(g, () => g.arc(22, -45, 3, 0, TAU), INK, 0);
+        shape(g, () => { g.moveTo(6, -60); g.lineTo(34, -52); }, null, 6);           // çatık kaş
+        shape(g, () => { g.moveTo(26, -24); g.bezierCurveTo(40, -36, 60, -30, 66, -48); g.bezierCurveTo(68, -22, 46, -12, 26, -18); g.closePath(); }, "rgba(20,10,4,0.9)", 2); // pala bıyık
+        shape(g, () => { g.moveTo(22, -24); g.bezierCurveTo(6, -34, -12, -26, -18, -44); g.bezierCurveTo(-22, -16, 2, -12, 22, -18); g.closePath(); }, "rgba(20,10,4,0.9)", 2);
+        shape(g, () => { g.moveTo(-24, -70); g.quadraticCurveTo(-26, -120, 6, -122); g.quadraticCurveTo(36, -120, 34, -70); g.closePath(); }, "rgba(150,26,30,0.72)");
+        punch(g, rosette(6, -98, 8, 2.4));
+        shape(g, () => g.ellipse(6, -68, 36, 12, 0, 0, TAU), "rgba(230,200,120,0.62)");
+        punch(g, dots(-24, -68, 34, -68, 7, 2));
+        shape(g, () => { g.moveTo(6, -122); g.quadraticCurveTo(-24, -124, -30, -92); }, null, 3);
+        shape(g, () => g.arc(-30, -89, 5, 0, TAU), INK, 0);
+      });
+      joint(g, 22, -54, p.arm, () => {
+        shape(g, () => { g.moveTo(-5, 110); g.lineTo(5, 110); g.quadraticCurveTo(22, 180, -6, 238); g.quadraticCurveTo(0, 180, -5, 110); g.closePath(); }, "rgba(196,206,216,0.5)", 2.5); // pala
+        punch(g, dots(1, 130, 5, 200, 4, 1.8));
+        arm(g, { len: 96, w: 12, sleeve: "rgba(226,206,160,0.6)", cuff: "rgba(136,36,34,0.75)" });
+        shape(g, () => g.rect(-15, 102, 30, 7), "rgba(170,126,40,0.88)", 2);
+      });
+    },
+  },
+};
+const CHAR_KEYS = Object.keys(CHARACTERS);
+
+// ---------------------------------------------------------------------------
+// Sahne figürleri (2 yuva)
+// ---------------------------------------------------------------------------
+const OW = 560, OH = 640, OX = 280, OY = 330;   // tasvirin kendi tuvali
+const BASE_SCALE = 0.82;
+const GROUND_Y = SH - F - 168 * BASE_SCALE;
+function makeFigure(slot, char, x, facing) {
+  const oc = document.createElement("canvas"); oc.width = OW; oc.height = OH;
+  return { slot, char, oc, g: oc.getContext("2d"), x, y: GROUND_Y, tx: x, ty: GROUND_Y, vx: 0, vy: 0, depth: 0.15, tdepth: 0.15, facing, armA: CHARACTERS[char].restArm, armV: 0, headA: 0, walk: 0, act: null, actCount: 0, knock: 0, knockDir: 1 };
+}
+const figs = [makeFigure(0, "karagoz", SW * 0.34, 1), makeFigure(1, "hacivat", SW * 0.66, -1)];
+const state = { intro: true, introA: 1, selected: 0, props: true };
+const effects = [];
+
+function clampTarget(x, y) { return [clamp(x, F - 70, SW - F + 70), clamp(y, F + 210, SH - F + 190)]; }
+function setTarget(f, x, y) { [f.tx, f.ty] = clampTarget(x, y); }
+
+function updateFigure(f, dt) {
+  if (dt <= 0) return;
+  const k = 1 - Math.exp(-dt * 10);
+  const ox = f.x, oy = f.y;
+  f.x += (f.tx - f.x) * k; f.y += (f.ty - f.y) * k;
+  f.depth += (f.tdepth - f.depth) * (1 - Math.exp(-dt * 6));
+  f.vx += ((f.x - ox) / dt - f.vx) * 0.3;
+  f.vy += ((f.y - oy) / dt - f.vy) * 0.3;
+  f.walk += Math.hypot(f.vx, f.vy) * dt * 0.045;
+  const ch = CHARACTERS[f.char];
+  // Kol sarkaç gibi: hareket yönüne göre geride kalır
+  const target = ch.restArm + clamp(f.vx * f.facing * 0.0022, -0.6, 0.6);
+  f.armV += ((target - f.armA) * 55 - f.armV * 7) * dt; f.armA += f.armV * dt;
+  f.headA += (clamp(f.vy * 0.0006, -0.12, 0.12) - f.headA) * k;
+  if (f.act) {
+    f.act.t += dt / f.act.dur;
+    if (f.act.hitT != null && !f.act.hit && f.act.t >= f.act.hitT) { f.act.hit = true; checkHit(f); }
+    if (f.act.t >= 1) f.act = null;
+  }
+  f.knock = Math.max(0, f.knock - dt * 2.5);
+}
+
+function checkHit(f) {
+  const o = figs[1 - f.slot], dx = o.x - f.x;
+  if (Math.sign(dx) === f.facing && Math.abs(dx) < 220 * BASE_SCALE && Math.abs(o.y - f.y) < 150) {
+    o.knock = 1; o.knockDir = f.facing;
+    const sfx = f.act.sfx;
+    if (sfx) effects.push({ x: (f.x + o.x) / 2, y: f.y - 170 * BASE_SCALE, text: sfx, t: 0 });
+  }
+}
+
+function doAction(slot) {
+  if (state.intro) return;
+  const f = figs[slot], ch = CHARACTERS[f.char];
+  const v = f.actCount++, a = ch.acts[v % ch.acts.length];
+  f.act = { t: 0, dur: a.dur, variant: v, hitT: a.hitT ?? null, hit: false, sfx: a.sfx };
+  setStatus(`${ch.name} ${a.verb}`);
+}
+
+function renderFigure(f, pose) {
+  const g = f.g;
+  g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, OW, OH);
+  g.setTransform(1, 0, 0, 1, OX, OY);
+  g.lineJoin = "round"; g.lineCap = "round";
+  CHARACTERS[f.char].draw(g, pose);
+}
+
+const NO_ACT = {};
+function figScale(f) { return BASE_SCALE * (1 + f.depth * 0.4); }
+function drawFigure(f, t, alphaMul) {
+  const ch = CHARACTERS[f.char];
+  const ap = f.act ? ch.action(Math.min(1, f.act.t), f.act.variant) : NO_ACT;
+  renderFigure(f, { arm: f.armA + (ap.arm || 0), head: f.headA + (ap.head || 0), headDx: ap.headDx || 0, time: t });
+  const S = figScale(f), speed = Math.hypot(f.vx, f.vy);
+  const bob = -Math.abs(Math.sin(f.walk)) * Math.min(1, speed / 260) * 9 * S + (ap.hop || 0) * S;
+  const sway = clamp(f.vx * 0.00028, -0.14, 0.14) + Math.sin(t * 1.6 + f.slot * 2) * 0.012 + f.knock * 0.28 * f.knockDir;
+  const x = f.x + ((ap.lunge || 0) * f.facing + f.knock * 34 * f.knockDir) * S, y = f.y + bob;
+  const a = alphaMul * (1 - f.depth * 0.5);
+  // Çubuğun soluk gölgesi
+  ctx.save();
+  ctx.globalAlpha = 0.16 * a; ctx.strokeStyle = "#2a1608"; ctx.lineWidth = 7 * S; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.moveTo(x - 6 * S * f.facing, y - 8 * S); ctx.lineTo(x - 34 * S * f.facing, SH); ctx.stroke();
+  ctx.restore();
+  ctx.save();
+  ctx.translate(x, y); ctx.rotate(sway); ctx.scale(S * f.facing, S);
+  // Perdeden uzaklaştıkça: büyür, bulanıklaşır, rengi solar
+  if (FILTER_OK && f.depth > 0.02) ctx.filter = `blur(${(f.depth * 9).toFixed(1)}px) saturate(${(1 - f.depth * 0.75).toFixed(2)}) brightness(${(1 - f.depth * 0.45).toFixed(2)})`;
+  ctx.globalAlpha = a;
+  ctx.drawImage(f.oc, -OX, -OY);
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------------------
+// Perde, çerçeve, dekor, göstermelik (önceden çizilen tuvaller)
+// ---------------------------------------------------------------------------
+const mk = (w, h) => { const c = document.createElement("canvas"); c.width = w; c.height = h; return c; };
+const frameCanvas = mk(SW, SH), propsCanvas = mk(CW, CH), gostCanvas = mk(CW, CH), noiseCanvas = mk(128, 128);
+
+function buildFrame() {
+  const g = frameCanvas.getContext("2d");
+  const wood = g.createLinearGradient(0, 0, 0, SH);
+  wood.addColorStop(0, "#4a2c17"); wood.addColorStop(0.5, "#3a2112"); wood.addColorStop(1, "#2a170b");
+  g.fillStyle = wood; g.fillRect(0, 0, SW, SH);
+  g.strokeStyle = "rgba(0,0,0,0.2)"; g.lineWidth = 1;
+  for (let i = 0; i < 70; i++) {
+    const y = rand() * SH; g.beginPath(); g.moveTo(0, y);
+    g.bezierCurveTo(SW * 0.3, y + rand() * 8 - 4, SW * 0.6, y + rand() * 8 - 4, SW, y + rand() * 6 - 3); g.stroke();
+  }
+  g.clearRect(F, F, CW, CH);
+  g.strokeStyle = "rgba(0,0,0,0.65)"; g.lineWidth = 4; g.strokeRect(F - 2, F - 2, CW + 4, CH + 4);
+  g.strokeStyle = "rgba(255,210,150,0.14)"; g.lineWidth = 2; g.strokeRect(1, 1, SW - 2, SH - 2);
+  const m = F / 2, gold = "rgba(206,160,80,0.72)";
+  g.strokeStyle = "rgba(206,160,80,0.35)"; g.lineWidth = 1.5;
+  g.strokeRect(m - 11, m - 11, SW - 2 * m + 22, SH - 2 * m + 22); g.strokeRect(m + 11, m + 11, SW - 2 * m - 22, SH - 2 * m - 22);
+  g.fillStyle = gold;
+  const diamond = (x, y, s) => { g.beginPath(); g.moveTo(x, y - s); g.lineTo(x + s, y); g.lineTo(x, y + s); g.lineTo(x - s, y); g.closePath(); g.fill(); };
+  const dot = (x, y, r) => { g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill(); };
+  for (let x = 2 * F; x <= SW - 2 * F; x += 28) { diamond(x, m, 6); diamond(x, SH - m, 6); if (x + 14 < SW - 2 * F) { dot(x + 14, m, 2); dot(x + 14, SH - m, 2); } }
+  for (let y = 2 * F; y <= SH - 2 * F; y += 28) { diamond(m, y, 6); diamond(SW - m, y, 6); if (y + 14 < SH - 2 * F) { dot(m, y + 14, 2); dot(SW - m, y + 14, 2); } }
+  for (const [x, y] of [[m, m], [SW - m, m], [m, SH - m], [SW - m, SH - m]]) { for (let i = 0; i < 8; i++) { const a = (i / 8) * TAU; dot(x + Math.cos(a) * 9, y + Math.sin(a) * 9, 3); } dot(x, y, 4.5); }
+}
+
+function buildNoise() {
+  const g = noiseCanvas.getContext("2d"), img = g.createImageData(128, 128), d = img.data;
+  for (let y = 0; y < 128; y++) for (let x = 0; x < 128; x++) {
+    const i = (y * 128 + x) * 4, weave = (x % 3 === 0 ? -30 : 0) + (y % 3 === 0 ? -30 : 0);
+    const v = clamp(150 + (rand() - 0.5) * 160 + weave, 0, 255);
+    d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+}
+
+function leaf(g, x, y, len, rot) {
+  g.save(); g.translate(x, y); g.rotate(rot);
+  shape(g, () => { g.moveTo(0, 0); g.quadraticCurveTo(len * 0.5, -len * 0.32, len, 0); g.quadraticCurveTo(len * 0.5, len * 0.32, 0, 0); g.closePath(); }, "rgba(48,120,64,0.6)", 2);
+  punch(g, dots(len * 0.25, 0, len * 0.75, 0, 3, 1.8));
+  g.restore();
+}
+function tulip(g, x, y, s, rot, col = "rgba(196,40,52,0.66)") {
+  g.save(); g.translate(x, y); g.rotate(rot); g.scale(s, s);
+  shape(g, () => { g.moveTo(0, 0); g.bezierCurveTo(-20, -6, -18, -40, -8, -54); g.lineTo(-2, -36); g.lineTo(0, -58); g.lineTo(2, -36); g.lineTo(8, -54); g.bezierCurveTo(18, -40, 20, -6, 0, 0); g.closePath(); }, col, 3 / s);
+  punch(g, [[0, -20, 3], [-7, -32, 2], [7, -32, 2]]);
+  g.restore();
+}
+function carnation(g, x, y, s, rot, col = "rgba(214,80,110,0.62)") {
+  g.save(); g.translate(x, y); g.rotate(rot); g.scale(s, s);
+  shape(g, () => { g.moveTo(-8, 0); g.lineTo(8, 0); g.lineTo(12, -16); g.lineTo(-12, -16); g.closePath(); }, "rgba(48,110,60,0.7)", 2 / s);
+  shape(g, () => {
+    g.moveTo(-26, -16); g.arc(0, -16, 26, Math.PI, 0); g.closePath();
+    for (let i = 0; i < 7; i++) { const a = Math.PI + (i / 6) * Math.PI, px = Math.cos(a) * 26, py = -16 + Math.sin(a) * 26; g.moveTo(px + 8, py); g.arc(px, py, 8, 0, TAU); }
+  }, col, 2.5 / s);
+  punch(g, Array.from({ length: 5 }, (_, i) => { const a = Math.PI + ((i + 0.5) / 5) * Math.PI; return [Math.cos(a) * 15, -16 + Math.sin(a) * 15, 2.4]; }));
+  g.restore();
+}
+
+function buildProps() {
+  const g = propsCanvas.getContext("2d"); g.lineJoin = "round"; g.lineCap = "round";
+  const gy = CH - 4;
+  // Ev (cumbalı Osmanlı evi), solda
+  const hx = 40;
+  shape(g, () => g.rect(hx, gy - 170, 170, 170), "rgba(150,96,56,0.55)");
+  shape(g, () => g.rect(hx - 8, gy - 290, 206, 120), "rgba(196,140,80,0.55)");
+  for (let i = 0; i < 4; i++) shape(g, () => { const x = hx + 6 + i * 52; g.moveTo(x, gy - 170); g.lineTo(x + 14, gy - 170); g.lineTo(x + 4, gy - 150); g.closePath(); }, "rgba(110,66,36,0.7)", 2);
+  shape(g, () => { g.moveTo(hx - 34, gy - 288); g.lineTo(hx + 95, gy - 362); g.lineTo(hx + 228, gy - 288); g.closePath(); }, "rgba(150,40,34,0.62)");
+  punch(g, [...dots(hx - 6, gy - 298, hx + 196, gy - 298, 12, 2.2), ...rosette(hx + 95, gy - 322, 9, 3)]);
+  // pencereler (kafesli) ve kapı
+  g.save(); g.globalCompositeOperation = "destination-out"; g.beginPath();
+  for (let i = 0; i < 3; i++) { const x = hx + 14 + i * 64; g.moveTo(x, gy - 186); g.lineTo(x, gy - 250); g.quadraticCurveTo(x + 22, gy - 274, x + 44, gy - 250); g.lineTo(x + 44, gy - 186); g.closePath(); }
+  g.rect(hx + 20, gy - 140, 46, 56); g.moveTo(hx + 104, gy); g.lineTo(hx + 104, gy - 104); g.quadraticCurveTo(hx + 128, gy - 128, hx + 152, gy - 104); g.lineTo(hx + 152, gy); g.closePath();
+  g.fill(); g.restore();
+  g.strokeStyle = "rgba(60,34,16,0.75)"; g.lineWidth = 2.5;
+  for (let i = 0; i < 3; i++) { const x = hx + 14 + i * 64; g.beginPath(); for (let k = 1; k < 4; k++) { g.moveTo(x + k * 11, gy - 186); g.lineTo(x + k * 11, gy - 256); } for (let k = 1; k < 4; k++) { g.moveTo(x, gy - 186 - k * 16); g.lineTo(x + 44, gy - 186 - k * 16); } g.stroke(); }
+  g.beginPath(); g.moveTo(hx + 43, gy - 140); g.lineTo(hx + 43, gy - 84); g.moveTo(hx + 20, gy - 112); g.lineTo(hx + 66, gy - 112); g.stroke();
+  // Ağaç, sağda
+  const tx = CW - 160;
+  shape(g, () => { g.moveTo(tx - 16, gy); g.quadraticCurveTo(tx - 6, gy - 120, tx - 24, gy - 230); g.lineTo(tx + 6, gy - 234); g.quadraticCurveTo(tx + 10, gy - 120, tx + 18, gy); g.closePath(); }, "rgba(96,60,32,0.68)");
+  const blobs = [[tx - 70, gy - 260, 62], [tx + 26, gy - 300, 72], [tx + 88, gy - 230, 56], [tx - 14, gy - 208, 52], [tx - 30, gy - 330, 50]];
+  shape(g, () => { for (const [x, y, r] of blobs) { g.moveTo(x + r, y); g.arc(x, y, r, 0, TAU); } }, "rgba(56,128,70,0.5)", 2.5);
+  const holes = [];
+  for (const [x, y, r] of blobs) for (let i = 0; i < 9; i++) { const a = rand() * TAU, rr = Math.sqrt(rand()) * r * 0.8; holes.push([x + Math.cos(a) * rr, y + Math.sin(a) * rr, 2 + rand() * 2.5]); }
+  punch(g, holes);
+  for (const [x, y] of [[tx - 40, gy - 240], [tx + 50, gy - 270], [tx + 90, gy - 210], [tx - 6, gy - 330], [tx + 10, gy - 200]]) shape(g, () => g.arc(x, y, 7, 0, TAU), "rgba(196,40,40,0.72)", 1.5);
+}
+
+function buildGostermelik() {
+  const g = gostCanvas.getContext("2d"); g.lineJoin = "round"; g.lineCap = "round";
+  const cx = CW / 2, base = CH - 70;
+  // Yanlarda selviler
+  for (const s of [-1, 1]) {
+    const x = cx + s * 440;
+    shape(g, () => { g.moveTo(x, 110); g.bezierCurveTo(x + 62, 260, x + 74, 500, x + 26, base); g.lineTo(x - 26, base); g.bezierCurveTo(x - 74, 500, x - 62, 260, x, 110); g.closePath(); }, "rgba(38,112,72,0.6)");
+    const holes = [];
+    for (let r = 0; r < 9; r++) { const y = 170 + r * 48, w = Math.min(44, 14 + r * 7); holes.push(...dots(x - w, y + 14, x - 6, y, 3, 2.3), ...dots(x + 6, y, x + w, y + 14, 3, 2.3)); }
+    punch(g, holes);
+    shape(g, () => g.rect(x - 8, base, 16, 30), "rgba(96,60,32,0.72)", 2);
+  }
+  // Kemer (mihrabiye) pano
+  const L = cx - 290, R = cx + 290, sp = 300;
+  shape(g, () => { g.moveTo(L, base); g.lineTo(L, sp); g.bezierCurveTo(L, 170, cx - 90, 150, cx, 56); g.bezierCurveTo(cx + 90, 150, R, 170, R, sp); g.lineTo(R, base); g.closePath(); }, "rgba(44,74,140,0.42)", 4);
+  const bh = [], ins = 18;
+  for (let i = 0; i <= 10; i++) { const y = sp + ((base - 20 - sp) * i) / 10; bh.push([L + ins, y, 3], [R - ins, y, 3]); }
+  for (let i = 1; i < 14; i++) { const [x, y] = bez([L + ins, sp], [L + ins, 180], [cx - 86, 166], [cx, 84], i / 14); bh.push([x, y, 3], [2 * cx - x, y, 3]); }
+  bh.push([cx, 84, 4]);
+  punch(g, bh);
+  // Vazo ve çiçekler (hayat ağacı)
+  const vb = base - 10, top = vb - 182;
+  g.strokeStyle = "rgba(48,110,60,0.82)"; g.lineWidth = 6;
+  const stem = (p) => { g.beginPath(); g.moveTo(...p[0]); g.bezierCurveTo(...p[1], ...p[2], ...p[3]); g.stroke(); };
+  stem([[cx, top], [cx, top - 100], [cx, 270], [cx, 214]]);
+  for (const s of [-1, 1]) {
+    stem([[cx, top], [cx + s * 40, top - 80], [cx + s * 150, 350], [cx + s * 150, 296]]);
+    stem([[cx, top], [cx + s * 80, top - 30], [cx + s * 190, top - 60], [cx + s * 205, top - 116]]);
+    leaf(g, cx + s * 4, top - 70, 70, s > 0 ? -0.5 : Math.PI + 0.5);
+    leaf(g, cx + s * 92, 360, 56, s > 0 ? -1.2 : Math.PI + 1.2);
+    leaf(g, cx + s * 4, 300, 60, s > 0 ? -0.9 : Math.PI + 0.9);
+    carnation(g, cx + s * 150, 298, 1.25, s * 0.15);
+    tulip(g, cx + s * 205, top - 112, 1.1, s * 0.45, "rgba(226,150,40,0.66)");
+  }
+  tulip(g, cx, 216, 1.8, 0);
+  shape(g, () => { g.moveTo(cx - 44, vb); g.quadraticCurveTo(cx - 100, vb - 80, cx - 46, vb - 140); g.lineTo(cx - 30, vb - 172); g.lineTo(cx + 30, vb - 172); g.lineTo(cx + 46, vb - 140); g.quadraticCurveTo(cx + 100, vb - 80, cx + 44, vb); g.closePath(); }, "rgba(178,58,40,0.64)");
+  band(g, cx - 36, cx + 36, vb - 182, vb - 170, "rgba(214,160,50,0.78)");
+  punch(g, [...rosette(cx, vb - 80, 18, 5), ...dots(cx - 56, vb - 122, cx + 56, vb - 122, 7, 2.4), ...dots(cx - 46, vb - 30, cx + 46, vb - 30, 6, 2.4)]);
+  // Yazı kuşağı: harfler zımbayla delinmiş gibi
+  shape(g, () => (g.roundRect ? g.roundRect(cx - 230, CH - 62, 460, 48, 12) : g.rect(cx - 230, CH - 62, 460, 48)), "rgba(120,40,28,0.7)");
+  g.save(); g.globalCompositeOperation = "destination-out"; g.font = "bold 30px Georgia, 'Times New Roman', serif"; g.textAlign = "center"; g.textBaseline = "middle";
+  g.fillText("Karagöz Sahnesi", cx, CH - 37); g.restore();
+  punch(g, [[cx - 200, CH - 38, 4], [cx + 200, CH - 38, 4]]);
+}
+
+buildFrame(); buildNoise(); buildProps(); buildGostermelik();
+const fabric = ctx.createPattern(noiseCanvas, "repeat");
+
+// ---------------------------------------------------------------------------
+// Sahneyi çiz (kaydedilen tuval budur)
+// ---------------------------------------------------------------------------
+const rgb = (r, g, b) => `rgb(${Math.min(255, Math.round(r))},${Math.min(255, Math.round(g))},${Math.min(255, Math.round(b))})`;
+function flicker(t) { return 0.985 + 0.025 * Math.sin(t * 9.1) + 0.018 * Math.sin(t * 23.7 + 1.3) + 0.012 * Math.sin(t * 4.3 + 0.5) + (Math.random() - 0.5) * 0.012; }
+
+function renderStage(now = performance.now()) {
+  const t = now / 1000, fl = flicker(t);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = 1; ctx.filter = "none";
+  ctx.fillStyle = "#070504"; ctx.fillRect(0, 0, SW, SH);
+  ctx.save();
+  ctx.beginPath(); ctx.rect(F, F, CW, CH); ctx.clip();
+  // Mum ışığıyla aydınlanan perde
+  const gr = ctx.createRadialGradient(SW / 2, SH * 0.92, 30, SW / 2, SH * 0.62, SH * 0.98);
+  gr.addColorStop(0, rgb(255, 248 * fl, 218 * fl));
+  gr.addColorStop(0.45, rgb(248 * fl, 228 * fl, 182 * fl));
+  gr.addColorStop(1, rgb(172 * fl, 124 * fl, 70 * fl));
+  ctx.fillStyle = gr; ctx.fillRect(F, F, CW, CH);
+  ctx.globalAlpha = 0.06; ctx.fillStyle = fabric; ctx.fillRect(F, F, CW, CH); ctx.globalAlpha = 1;
+  if (state.props) { ctx.globalAlpha = 0.95; ctx.drawImage(propsCanvas, F, F); ctx.globalAlpha = 1; }
+  const ia = state.introA;
+  if (ia < 1) {
+    // Seçili tasvir üstte görünsün
+    const order = state.selected === 0 ? [figs[1], figs[0]] : [figs[0], figs[1]];
+    for (const f of order) drawFigure(f, t, 1 - ia);
+  }
+  if (ia > 0) { ctx.globalAlpha = ia; ctx.drawImage(gostCanvas, F, F); ctx.globalAlpha = 1; }
+  for (const e of effects) {
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, 1 - e.t / 0.8);
+    ctx.font = `bold ${Math.round(44 * (1 + e.t * 0.8))}px Georgia, 'Times New Roman', serif`;
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillStyle = "rgba(110,26,16,0.85)"; ctx.fillText(e.text, e.x, e.y - e.t * 50);
+    ctx.restore();
+  }
+  // Kenarlara doğru kararan, titreşen ışık
+  const vg = ctx.createRadialGradient(SW / 2, SH * 0.62, SH * 0.32, SW / 2, SH * 0.55, SH * 0.98);
+  vg.addColorStop(0, "rgba(40,18,4,0)");
+  vg.addColorStop(1, `rgba(30,12,2,${clamp(0.34 + (1 - fl) * 1.4, 0.15, 0.6).toFixed(3)})`);
+  ctx.fillStyle = vg; ctx.fillRect(F, F, CW, CH);
+  ctx.restore();
+  ctx.drawImage(frameCanvas, 0, 0);
+}
+
+// ---------------------------------------------------------------------------
+// Arayüz: tasvir seçiciler, çevir, dekor, göstermelik, kayıt
+// ---------------------------------------------------------------------------
+const toolsEl = document.getElementById("tools");
+toolsEl.innerHTML = [0, 1].map((s) => `
+  <div class="slot" data-slot="${s}">
+    <h2><b>${s + 1}. tasvir</b> <small>(${s === 0 ? "sol el" : "sağ el"})</small></h2>
+    <div class="chars">${CHAR_KEYS.map((k) => `<button data-slot="${s}" data-char="${k}">${k === "bekir" ? "Deli Bekir" : CHARACTERS[k].name}</button>`).join("")}</div>
+    <button class="flip" data-flip="${s}">↔ Yönünü çevir</button>
+  </div>`).join("");
+toolsEl.querySelectorAll("button[data-char]").forEach((b) => (b.onclick = () => setChar(Number(b.dataset.slot), b.dataset.char)));
+toolsEl.querySelectorAll("button[data-flip]").forEach((b) => (b.onclick = () => flip(Number(b.dataset.flip))));
+toolsEl.querySelectorAll(".slot").forEach((el) => el.addEventListener("pointerdown", () => select(Number(el.dataset.slot), true)));
+
+function refreshUI() {
+  toolsEl.querySelectorAll("button[data-char]").forEach((b) => b.classList.toggle("on", figs[Number(b.dataset.slot)].char === b.dataset.char));
+  toolsEl.querySelectorAll(".slot").forEach((el) => el.classList.toggle("sel", Number(el.dataset.slot) === state.selected));
+  document.getElementById("btnProps").classList.toggle("on", state.props);
+}
+function select(slot, quiet = false) {
+  state.selected = slot; refreshUI();
+  if (!quiet) setStatus(`${slot + 1}. tasvir seçili: ${CHARACTERS[figs[slot].char].name}`);
+}
+function setChar(slot, key) {
+  if (!CHARACTERS[key]) return;
+  const f = figs[slot];
+  f.char = key; f.act = null; f.armA = CHARACTERS[key].restArm; f.armV = 0;
+  select(slot, true);
+  setStatus(`${slot + 1}. tasvir: ${CHARACTERS[key].name} perdeye geldi.`);
+}
+function flip(slot) {
+  const f = figs[slot]; f.facing *= -1; select(slot, true);
+  setStatus(`${CHARACTERS[f.char].name} artık ${f.facing > 0 ? "sağa" : "sola"} bakıyor.`);
+}
+function toggleProps() { state.props = !state.props; refreshUI(); setStatus(state.props ? "Dekor (ev ve ağaç) perdede." : "Dekor kaldırıldı."); }
+const btnOpen = document.getElementById("btnOpen");
+function openCurtain() {
+  if (!state.intro) return;
+  state.intro = false; btnOpen.classList.add("hidden");
+  setStatus("Perde açıldı! Tasvirleri sürükle ya da elinle oynat; pinch = hareket.");
+}
+function showIntro() { state.intro = true; btnOpen.classList.remove("hidden"); layout(); setStatus("Göstermelik perdede. “Perde açılsın” de, oyun başlasın."); }
+btnOpen.onclick = openCurtain;
+document.getElementById("btnProps").onclick = toggleProps;
+document.getElementById("btnIntro").onclick = () => (state.intro ? openCurtain() : showIntro());
+
+// --- Kayıt (canvas.captureStream + MediaRecorder) -------------------------
+const btnRec = document.getElementById("btnRec"), micEl = document.getElementById("mic");
+const recEl = document.getElementById("rec"), recTimeEl = document.getElementById("recTime");
+let rec = null;
+async function toggleRecord() {
+  if (rec) { if (rec.recorder.state !== "inactive") rec.recorder.stop(); return; }
+  if (typeof stage.captureStream !== "function" || typeof MediaRecorder === "undefined") {
+    setStatus("Bu tarayıcı perde kaydını desteklemiyor (Chrome, Edge veya Firefox dene)."); return;
+  }
+  btnRec.disabled = true;
+  const stream = stage.captureStream(30);
+  let mic = null;
+  if (micEl.checked) {
+    try { mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true }, video: false }); mic.getAudioTracks().forEach((tr) => stream.addTrack(tr)); }
+    catch (err) { console.warn(err); mic = null; setStatus("Mikrofon açılamadı; kayıt sessiz yapılacak."); }
+  }
+  const types = mic ? ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4"] : ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm", "video/mp4"];
+  const mimeType = types.find((t) => MediaRecorder.isTypeSupported?.(t));
+  let recorder;
+  try { recorder = new MediaRecorder(stream, mimeType ? { mimeType, videoBitsPerSecond: 5_000_000 } : undefined); }
+  catch (err) {
+    console.error(err); mic?.getTracks().forEach((tr) => tr.stop()); stream.getTracks().forEach((tr) => tr.stop());
+    btnRec.disabled = false; setStatus("Kayıt başlatılamadı: " + (err?.message || err)); return;
+  }
+  const chunks = [];
+  recorder.ondataavailable = (e) => e.data && e.data.size && chunks.push(e.data);
+  recorder.onstop = () => {
+    const type = recorder.mimeType || mimeType || "video/webm", ext = type.includes("mp4") ? "mp4" : "webm";
+    const blob = new Blob(chunks, { type });
+    mic?.getTracks().forEach((tr) => tr.stop()); stream.getTracks().forEach((tr) => tr.stop());
+    rec = null; recEl.classList.remove("on"); btnRec.textContent = "⏺ Kaydet"; btnRec.classList.remove("rec-on"); micEl.disabled = false;
+    if (!blob.size) return setStatus("Kayıt boş çıktı, tekrar dene.");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `karagoz-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.${ext}`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    setStatus(`Oyun kaydedildi ve indirildi (${(blob.size / 1e6).toFixed(1)} MB). 🎬`);
+  };
+  recorder.start(1000);
+  rec = { recorder, start: performance.now(), mic: !!mic };
+  recEl.classList.add("on"); btnRec.textContent = "⏹ Durdur"; btnRec.classList.add("rec-on"); micEl.disabled = true; btnRec.disabled = false;
+  setStatus(mic ? "Kayıt başladı (görüntü + mikrofon). Bitince “Durdur”." : "Kayıt başladı (sessiz). Bitince “Durdur”.");
+}
+btnRec.onclick = toggleRecord;
+
+addEventListener("keydown", (e) => {
+  if (e.target instanceof HTMLInputElement) return;
+  const k = e.key.toLowerCase();
+  if (e.key === " ") { e.preventDefault(); state.intro ? openCurtain() : doAction(state.selected); }
+  else if (e.key === "Enter") openCurtain();
+  else if (e.key === "Tab") { e.preventDefault(); select(1 - state.selected); }
+  else if (k === "f") flip(state.selected);
+  else if (k === "d") toggleProps();
+  else if (CHAR_KEYS[Number(e.key) - 1]) setChar(state.selected, CHAR_KEYS[Number(e.key) - 1]);
+});
+
+// ---------------------------------------------------------------------------
+// Giriş: el (MediaPipe) + fare
+// ---------------------------------------------------------------------------
+const hands = [null, null];
+const mouse = { drag: null };
+let landmarker = null, camOn = false, lastVideoTime = -1;
+const wasPinch = {};
+// El büyüklüğü (bilek → orta parmak kökü, video birimi): bu aralık 0..1'e çevrilir.
+// Yakın (büyük el) = tasvir perdeye yapışık; uzak (küçük el) = gölge büyür, bulanıklaşır.
+const DEPTH_RANGE = { near: 0.14, far: 0.06 };
+
+function screenToStage(x, y, margin = 40) {
+  const r = stage.getBoundingClientRect();
+  return { x: ((x - r.left) / r.width) * SW, y: ((y - r.top) / r.height) * SH, near: x >= r.left - margin && x <= r.right + margin && y >= r.top - margin && y <= r.bottom + margin };
+}
+function stageToScreen(x, y) { const r = stage.getBoundingClientRect(); return { x: r.left + (x / SW) * r.width, y: r.top + (y / SH) * r.height }; }
+function hitTest(x, y) {
+  const order = state.selected === 0 ? [0, 1] : [1, 0];   // üstte çizilen önce
+  for (const i of order) {
+    const f = figs[i], S = figScale(f);
+    const dx = (x - f.x) / (S * 95), dy = (y - (f.y - 30 * S)) / (S * 215);
+    if (dx * dx + dy * dy < 1) return i;
+  }
+  return -1;
+}
+
+stage.addEventListener("pointerdown", (e) => {
+  if (state.intro) return;
+  const p = screenToStage(e.clientX, e.clientY);
+  let slot = hitTest(p.x, p.y);
+  const hit = slot >= 0;
+  if (!hit) slot = state.selected;
+  select(slot, hit ? true : false);
+  const f = figs[slot];
+  mouse.drag = { slot, hit, offx: hit ? p.x - f.tx : 0, offy: hit ? p.y - f.ty : 0, sx: e.clientX, sy: e.clientY, t: performance.now(), moved: false };
+  if (!hit) setTarget(f, p.x, p.y);
+  stage.setPointerCapture(e.pointerId);
+});
+stage.addEventListener("pointermove", (e) => {
+  const d = mouse.drag; if (!d) return;
+  if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 6) d.moved = true;
+  const p = screenToStage(e.clientX, e.clientY);
+  setTarget(figs[d.slot], p.x - d.offx, p.y - d.offy);
+});
+const endDrag = () => {
+  const d = mouse.drag; mouse.drag = null;
+  if (d && d.hit && !d.moved && performance.now() - d.t < 450) doAction(d.slot);
+};
+stage.addEventListener("pointerup", endDrag);
+stage.addEventListener("pointercancel", () => (mouse.drag = null));
+stage.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  if (state.intro) return;
+  const p = screenToStage(e.clientX, e.clientY);
+  let slot = hitTest(p.x, p.y); if (slot < 0) slot = state.selected;
+  const f = figs[slot];
+  f.tdepth = clamp(f.tdepth + e.deltaY * 0.0012, 0, 1);
+  setStatus(`${CHARACTERS[f.char].name}: perdeden uzaklık %${Math.round(f.tdepth * 100)}`);
+}, { passive: false });
+
+async function loadLandmarker() {
+  setStatus("El takibi modeli yükleniyor…");
+  const { FilesetResolver, HandLandmarker } = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs");
+  const files = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
+  const opts = (delegate) => ({
+    baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task", delegate },
+    runningMode: "VIDEO", numHands: 2, minHandDetectionConfidence: 0.6, minTrackingConfidence: 0.5,
+  });
+  try { return await HandLandmarker.createFromOptions(files, opts("GPU")); }
+  catch { return await HandLandmarker.createFromOptions(files, opts("CPU")); }
+}
+
+async function toggleCamera() {
+  const btn = document.getElementById("btnCam");
+  if (camOn) {
+    video.srcObject?.getTracks().forEach((t) => t.stop());
+    video.srcObject = null; video.classList.remove("on"); camOn = false; hands[0] = hands[1] = null;
+    btn.textContent = "📷 Kamera"; setStatus("Kamera kapalı. Fareyle oynatmaya devam edebilirsin."); return;
+  }
+  try {
+    btn.disabled = true;
+    if (!landmarker) landmarker = await loadLandmarker();
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" }, audio: false });
+    video.srcObject = stream; await video.play();
+    video.classList.add("on"); camOn = true; btn.textContent = "📷 Kapat";
+    setStatus("Elini göster. Sol el 1., sağ el 2. tasvir; pinch = hareket; düğmelerin üstünde pinch = seç.");
+  } catch (err) {
+    console.error(err);
+    setStatus("Kamera açılamadı: " + (err?.message || err) + " — fareyle devam edebilirsin.");
+  } finally { btn.disabled = false; }
+}
+document.getElementById("btnCam").onclick = toggleCamera;
+
+function videoToScreen(nx, ny) {
+  const W = innerWidth, H = innerHeight, vw = video.videoWidth || 1280, vh = video.videoHeight || 720;
+  const s = Math.max(W / vw, H / vh), dw = vw * s, dh = vh * s;
+  return { x: (W - dw) / 2 + (1 - nx) * dw, y: (H - dh) / 2 + ny * dh };
+}
+
+// --- Kararlı el işaretçisi -------------------------------------------------
+// One Euro filtresi: el yavaşken titreşimi güçlü biçimde bastırır,
+// hızlı hareket ederken gecikmeyi azaltır.
+class OneEuro {
+  constructor(minCutoff = 1.0, beta = 0.004, dCutoff = 1.0) { Object.assign(this, { minCutoff, beta, dCutoff, x: null, dx: 0, t: 0 }); }
+  static alpha(cutoff, dt) { const tau = 1 / (2 * Math.PI * cutoff); return 1 / (1 + tau / dt); }
+  filter(x, t) {
+    if (this.x === null) { this.x = x; this.t = t; return x; }
+    const dt = Math.max(1e-3, t - this.t); this.t = t;
+    this.dx += OneEuro.alpha(this.dCutoff, dt) * ((x - this.x) / dt - this.dx);
+    const cutoff = this.minCutoff + this.beta * Math.abs(this.dx);
+    this.x += OneEuro.alpha(cutoff, dt) * (x - this.x);
+    return this.x;
+  }
+}
+const STABILITY = { minCutoff: 0.5, beta: 0.004 }; // minCutoff küçüldükçe daha durgun, beta büyüdükçe daha çevik
+const newHandFilter = () => ({ x: new OneEuro(STABILITY.minCutoff, STABILITY.beta), y: new OneEuro(STABILITY.minCutoff, STABILITY.beta), pinchVotes: 0, raw: null, s: null });
+const handFilters = [newHandFilter(), newHandFilter()];
+
+function readHands() {
+  if (!camOn || !landmarker || video.readyState < 2 || video.currentTime === lastVideoTime) return;
+  lastVideoTime = video.currentTime;
+  let lms = (landmarker.detectForVideo(video, performance.now()).landmarks || []).slice(0, 2);
+  // İki el varsa sıra kareden kareye değişebilir: önceki konumlara en yakın eşleşmeyi koru
+  if (lms.length === 2 && handFilters[0].raw && handFilters[1].raw) {
+    const d = (lm, f) => Math.hypot(lm[0].x - f.raw.x, lm[0].y - f.raw.y);
+    if (d(lms[0], handFilters[1]) + d(lms[1], handFilters[0]) < d(lms[0], handFilters[0]) + d(lms[1], handFilters[1])) lms = [lms[1], lms[0]];
+  }
+  const t = performance.now() / 1000;
+  for (let h = 0; h < 2; h++) {
+    const lm = lms[h];
+    if (!lm) { hands[h] = null; handFilters[h] = newHandFilter(); continue; }
+    const f = handFilters[h];
+    f.raw = { x: lm[0].x, y: lm[0].y };
+    const thumb = lm[4], index = lm[8], knuckle = lm[5];
+    // Sabit referans noktası: iki parmak ucu + işaret parmağı kökü.
+    // Pinch açılıp kapanırken iki uç simetrik yaklaştığı için nokta zıplamaz.
+    const nx = thumb.x * 0.35 + index.x * 0.35 + knuckle.x * 0.3;
+    const ny = thumb.y * 0.35 + index.y * 0.35 + knuckle.y * 0.3;
+    const sp = videoToScreen(nx, ny);
+    const x = f.x.filter(sp.x, t), y = f.y.filter(sp.y, t);
+    // Pinch: histerezis + durum değişikliği için 2 kare onay (titrek tıklamaları önler)
+    const size = Math.hypot(lm[0].x - lm[9].x, lm[0].y - lm[9].y) || 0.1;
+    const ratio = Math.hypot(thumb.x - index.x, thumb.y - index.y) / size;
+    const was = !!hands[h]?.pinch;
+    const want = was ? ratio < 0.45 : ratio < 0.32;
+    f.pinchVotes = want !== was ? f.pinchVotes + 1 : 0;
+    const pinch = f.pinchVotes >= 2 ? want : was;
+    if (f.pinchVotes >= 2) f.pinchVotes = 0;
+    // Derinlik: elin görünen büyüklüğü (yumuşatılmış), 0 = uzak … 1 = kameraya yakın
+    f.s = f.s === null ? size : f.s + (size - f.s) * 0.2;
+    const sizeN = clamp((f.s - DEPTH_RANGE.far) / (DEPTH_RANGE.near - DEPTH_RANGE.far), 0, 1);
+    hands[h] = { x, y, pinch, size: sizeN, rawSize: f.s };
+  }
+}
+
+/** Ellerin hangi tasviri oynattığı: iki elde soldaki el 1., sağdaki 2. yuva; tek elde seçili yuva. */
+function handleInput() {
+  const hs = [];
+  hands.forEach((h, i) => h && hs.push({ id: "h" + i, ...h }));
+  if (hs.length === 2) { hs.sort((a, b) => a.x - b.x); hs[0].slot = 0; hs[1].slot = 1; }
+  else if (hs.length === 1) hs[0].slot = state.selected;
+  for (const h of hs) {
+    const started = h.pinch && !wasPinch[h.id];
+    if (started) {
+      // Elle pinch: düğmenin üstündeyse ona bas
+      const el = document.elementFromPoint(h.x, h.y)?.closest("button, label");
+      if (el) el.click();
+      else if (state.intro) openCurtain();
+      else doAction(h.slot);
+    }
+    const p = screenToStage(h.x, h.y);
+    if (p.near && !state.intro) { const f = figs[h.slot]; setTarget(f, p.x, p.y); f.tdepth = 1 - h.size; }
+  }
+  for (const id of ["h0", "h1"]) wasPinch[id] = !!hs.find((t) => t.id === id)?.pinch;
+  return hs;
+}
+
+// ---------------------------------------------------------------------------
+// Üst katman: el imleçleri ve tasvir numaraları (kayda girmez)
+// ---------------------------------------------------------------------------
+const SLOT_COLORS = ["#f0a040", "#3fb6c4"];
+function drawOverlay(hs) {
+  const g = octx;
+  g.clearRect(0, 0, innerWidth, innerHeight);
+  g.textAlign = "center"; g.textBaseline = "middle";
+  if (state.introA < 0.5) {
+    const r = stage.getBoundingClientRect();
+    for (const f of figs) {
+      const S = figScale(f), p = stageToScreen(f.x, f.y - 262 * S), sel = f.slot === state.selected;
+      if (p.x < r.left + 10 || p.x > r.right - 10 || p.y < r.top + 10 || p.y > r.bottom) continue;
+      g.globalAlpha = sel ? 0.95 : 0.55;
+      g.fillStyle = SLOT_COLORS[f.slot]; g.beginPath(); g.arc(p.x, p.y, sel ? 11 : 9, 0, TAU); g.fill();
+      g.fillStyle = "#1a0f08"; g.font = "bold 12px system-ui, sans-serif"; g.fillText(String(f.slot + 1), p.x, p.y + 0.5);
+    }
+    g.globalAlpha = 1;
+  }
+  for (const h of hs) {
+    const col = SLOT_COLORS[h.slot];
+    g.save(); g.translate(h.x, h.y);
+    g.lineWidth = 3; g.strokeStyle = col; g.beginPath(); g.arc(0, 0, h.pinch ? 11 : 17, 0, TAU); g.stroke();
+    if (h.pinch) { g.fillStyle = col; g.fill(); }
+    g.fillStyle = "rgba(0,0,0,.55)"; g.beginPath(); g.arc(0, -31, 10, 0, TAU); g.fill();
+    g.fillStyle = col; g.font = "bold 12px system-ui, sans-serif"; g.fillText(String(h.slot + 1), 0, -30.5);
+    g.restore();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Yerleşim ve döngü
+// ---------------------------------------------------------------------------
+function layout() {
+  overlay.width = innerWidth * devicePixelRatio; overlay.height = innerHeight * devicePixelRatio;
+  octx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+  const narrow = innerWidth <= 1000;
+  const bar = document.getElementById("bar"), tools = document.getElementById("tools"), hud = document.querySelector(".hud");
+  // Dar ekranda tasvir seçiciler alt çubuğun hemen üstünde; sahne kalan boşluğa sığar
+  tools.style.bottom = narrow ? bar.offsetHeight + 24 + "px" : "";
+  const top = hud.getBoundingClientRect().bottom + 14;
+  const bottomReserve = narrow ? bar.offsetHeight + tools.offsetHeight + 52 : bar.offsetHeight + 40;
+  const rightReserve = narrow ? 20 : tools.offsetWidth + 36;
+  const availW = innerWidth - 20 - rightReserve, availH = innerHeight - top - bottomReserve;
+  const s = Math.max(0.15, Math.min(availW / SW, availH / SH));
+  const w = SW * s, h = SH * s;
+  const left = 20 + Math.max(0, (availW - w) / 2), y0 = top + Math.max(0, (availH - h) / 2);
+  stage.style.width = w + "px"; stage.style.height = h + "px";
+  stage.style.left = left + "px"; stage.style.top = y0 + "px";
+  btnOpen.style.left = left + w / 2 + "px"; btnOpen.style.top = y0 + h * 0.84 + "px";
+  recEl.style.left = left + 14 + "px"; recEl.style.top = y0 + 12 + "px";
+}
+addEventListener("resize", layout);
+refreshUI();
+layout();
+requestAnimationFrame(layout);
+
+function update(dt) {
+  const target = state.intro ? 1 : 0;
+  state.introA = target > state.introA ? Math.min(1, state.introA + dt / 0.5) : Math.max(0, state.introA - dt / 0.9);
+  for (const f of figs) updateFigure(f, dt);
+  for (const e of effects) e.t += dt;
+  while (effects.length && effects[0].t > 0.8) effects.shift();
+}
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min((now - last) / 1000, 0.1); last = now;
+  readHands();
+  const hs = handleInput();
+  update(dt);
+  renderStage(now);
+  drawOverlay(hs);
+  if (rec) { const s = Math.floor((performance.now() - rec.start) / 1000); recTimeEl.textContent = `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`; }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// ---------------------------------------------------------------------------
+// Test kancaları
+// ---------------------------------------------------------------------------
+window.__karagoz = {
+  get state() { return { ...state, recording: !!rec, camOn, slots: figs.map((f) => f.char) }; },
+  get figures() { return figs; },
+  get hands() { return hands; },
+  CHARACTERS: CHAR_KEYS, SW, SH, F, DEPTH_RANGE,
+  setChar, select, flip, act: doAction, openCurtain, showIntro, toggleProps, toggleRecord,
+  /** Tasviri sahne koordinatına (0..SW, 0..SH) taşı; instant=false ise yumuşakça gider. */
+  move(slot, x, y, instant = true) { const f = figs[slot]; setTarget(f, x, y); if (instant) { f.x = f.tx; f.y = f.ty; f.vx = f.vy = 0; } },
+  /** 0 = perdeye yapışık (net), 1 = uzak (büyük, bulanık). */
+  setDepth(slot, d, instant = true) { const f = figs[slot]; f.tdepth = clamp(d, 0, 1); if (instant) f.depth = f.tdepth; },
+  step(dt = 1 / 60) { update(dt); renderStage(); },
+  draw(now) { renderStage(now ?? performance.now()); },
+  canvas: stage,
+};
+</script>
+</body>
+</html>

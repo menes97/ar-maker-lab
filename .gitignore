@@ -1,0 +1,13 @@
+# Gizli/yerel ayarlar — asla yükleme
+.env*
+.vercel
+.claude
+
+# Bağımlılıklar ve üretilen dosyalar
+node_modules/
+promo/clips/
+promo/seslendirme.mp3
+
+# İşletim sistemi
+Thumbs.db
+.DS_Store

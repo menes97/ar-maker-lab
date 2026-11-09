@@ -1,0 +1,1015 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AR Kilim Tezgâhı</title>
+<style>
+  :root { --panel: rgba(22, 18, 16, 0.78); --line: rgba(255,255,255,.13); --text: #f4efe6; --muted: #bdb3a6; --accent: #9b2b23; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: radial-gradient(ellipse at 50% 30%, #3e3029, #15100d); color: var(--text); font: 14px/1.4 system-ui, "Segoe UI", sans-serif; }
+  #video { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); opacity: 0; transition: opacity .4s; }
+  #video.on { opacity: 1; }
+  #loom { position: fixed; touch-action: none; cursor: none; filter: drop-shadow(0 18px 30px rgba(0,0,0,.5)); }
+  #overlay { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 30; }
+  .hud { position: fixed; left: 16px; top: 16px; width: min(330px, calc(100vw - 32px)); padding: 10px 13px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; backdrop-filter: blur(8px); }
+  .hud h1 { margin: 0 0 4px; font-size: 16px; }
+  .hud p { margin: 3px 0 0; color: var(--muted); font-size: 12.5px; }
+  #status { color: var(--text); }
+  .prog { margin-top: 7px; height: 6px; border-radius: 3px; background: rgba(255,255,255,.1); overflow: hidden; }
+  #progBar { height: 100%; width: 0; background: linear-gradient(90deg, #9b2b23, #d4a033); transition: width .25s; }
+  .tools { position: fixed; right: 16px; top: 16px; display: flex; flex-direction: column; gap: 6px; padding: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; backdrop-filter: blur(8px); max-height: calc(100vh - 110px); overflow-y: auto; }
+  .tools .grp { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; margin: 2px 4px 0; }
+  #patterns { display: flex; flex-direction: column; gap: 6px; }
+  .hidden { display: none !important; }
+  .tools button, .bar button, .fin-actions button { border: 1px solid var(--line); background: rgba(255,255,255,.06); color: var(--text); padding: 8px 11px; border-radius: 10px; font: inherit; cursor: pointer; text-align: left; white-space: nowrap; }
+  .tools button.on { background: var(--accent); border-color: transparent; font-weight: 600; }
+  .tools button small { display: block; color: var(--muted); font-size: 11px; }
+  .tools button.on small { color: #f6dcd6; }
+  .bar { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; padding: 8px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; backdrop-filter: blur(8px); max-width: calc(100vw - 32px); z-index: 5; }
+  .swatch { width: 30px; height: 30px; border-radius: 50%; border: 2px solid rgba(255,255,255,.25); cursor: pointer; padding: 0 !important; }
+  .swatch.on { border-color: #fff; box-shadow: 0 0 0 3px rgba(255,255,255,.35); transform: scale(1.1); }
+  .sep { width: 1px; height: 26px; background: var(--line); }
+  input[type=color] { width: 34px; height: 30px; border: none; background: none; padding: 0; cursor: pointer; }
+  #finish { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: rgba(12, 9, 7, .84); backdrop-filter: blur(4px); }
+  #finCanvas { max-width: 92vw; max-height: calc(100vh - 110px); border-radius: 6px; animation: cut .6s cubic-bezier(.2,.8,.2,1); }
+  @keyframes cut { from { transform: translateY(-40px) scale(.92); opacity: 0; } to { transform: none; opacity: 1; } }
+  .fin-actions { display: flex; gap: 10px; }
+  .fin-actions button { padding: 10px 16px; font-size: 15px; background: rgba(255,255,255,.1); }
+  @media (max-width: 1000px) {
+    .hud p.long { display: none; }
+    .tools { top: auto; bottom: 120px; flex-direction: row; flex-wrap: wrap; justify-content: center; right: 50%; transform: translateX(50%); max-width: calc(100vw - 32px); max-height: none; overflow: visible; }
+    .tools .grp { display: none; }
+    #patterns { display: contents; }
+    .tools button { padding: 6px 9px; }
+    .tools button small { display: none; }
+  }
+</style>
+</head>
+<body>
+<video id="video" playsinline muted></video>
+<canvas id="loom"></canvas>
+<canvas id="overlay"></canvas>
+
+<div class="hud">
+  <h1><a href="../" data-home-link title="Tüm atölyeler" style="color:inherit;text-decoration:none;opacity:.7;margin-right:6px;font-weight:400">←</a>🧶 AR Kilim Tezgâhı</h1>
+  <p id="status">Renk seç, parlayan sıranın üzerinden mekiği geçir.</p>
+  <div class="prog"><div id="progBar"></div></div>
+  <p id="progText">Sıra 1/72 · %0 dokundu</p>
+  <p class="long">🤏 Pinch yap ve elini parlayan sıranın üstünde yana süpür = mekik atkıyı geçirir. Pinch ile sıranın altına doğru aşağı çek = kirkitle sıkıştır, sonraki sıraya geç. Pinch ile düğmelere de basabilirsin. 🖱️ Fare: basılı sürükle. Boşluk = kirkit, Ctrl+Z = geri al, 1–8 = renk.</p>
+</div>
+
+<div class="tools" id="tools">
+  <div class="grp">Mod</div>
+  <button data-mode="free" class="on">✋ Serbest <small>renkleri sen seç</small></button>
+  <button data-mode="pattern">🧩 Desenli <small>motif şablonu</small></button>
+  <div class="grp" id="patGrp">Motif</div>
+  <div id="patterns"></div>
+</div>
+
+<div class="bar" id="bar">
+  <div id="palette" style="display:flex; gap:6px; flex-wrap:wrap"></div>
+  <input type="color" id="custom" value="#7a3b6e" title="Özel renk" />
+  <span class="sep"></span>
+  <button id="btnUndo">↶ Geri al</button>
+  <button id="btnBeat">🪮 Kirkitle</button>
+  <button id="btnClear">🧹 Temizle</button>
+  <button id="btnFinish">✂️ Kilimi bitir</button>
+  <button id="btnCam">📷 Kamera</button>
+</div>
+
+<div id="finish" class="hidden">
+  <canvas id="finCanvas"></canvas>
+  <div class="fin-actions">
+    <button id="btnDownload">⬇️ PNG indir</button>
+    <button id="btnBack">↩️ Tezgâha dön</button>
+  </div>
+</div>
+
+<script type="module">
+// ---------------------------------------------------------------------------
+// Tezgâh geometrisi: dikey çözgüler, kilim alttan yukarı sıra sıra büyür.
+// Her hücre = bir çözgünün üstünden/altından geçen atkı kabarcığı.
+// ---------------------------------------------------------------------------
+const LW = 1000, LH = 1100;            // tezgâh tuvali (iç çözünürlük)
+const COLS = 48, ROWS = 72;            // çözgü sayısı × atkı sırası
+const CW = 16, CH = 12;                // hücre boyu (atkı sıraları sık, hücreler yatay)
+const KW = COLS * CW, KH = ROWS * CH;  // 768 × 864
+const KX0 = (LW - KW) / 2, KX1 = KX0 + KW;
+const KY_BOTTOM = 1014, KY_TOP = KY_BOTTOM - KH;
+const A = CH / CW;                     // en-boy oranı (motifler geometrik görünsün)
+const BAND = 40;                       // sıranın ± bu kadar yakınında süpürmek yeterli
+const LOOSE = 5;                       // kirkitlenmemiş sıra biraz havada durur
+
+const rowTop = (r) => KY_BOTTOM - (r + 1) * CH;
+const rowCenter = () => rowTop(Math.min(row, ROWS - 1)) + CH / 2;
+const warpX = (c) => KX0 + (c + 0.5) * CW;
+const colAt = (x) => Math.floor((x - KX0) / CW);
+
+const loom = document.getElementById("loom");
+const ctx = loom.getContext("2d");
+loom.width = LW; loom.height = LH;
+const overlay = document.getElementById("overlay");
+const octx = overlay.getContext("2d");
+const video = document.getElementById("video");
+const statusEl = document.getElementById("status");
+const setStatus = (t) => (statusEl.textContent = t);
+
+const mkLayer = () => { const c = document.createElement("canvas"); c.width = LW; c.height = LH; return c; };
+const loomLayer = mkLayer(), wovenLayer = mkLayer(), tplLayer = mkLayer();
+const wctx = wovenLayer.getContext("2d"), tctx = tplLayer.getContext("2d");
+
+// ---------------------------------------------------------------------------
+// Yardımcılar
+// ---------------------------------------------------------------------------
+function hrand(a, b, k = 0) {
+  let h = (Math.imul(a + 1, 374761393) + Math.imul(b + 7, 668265263) + Math.imul(k + 3, 1274126177)) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+const rgbCache = new Map();
+function hexRgb(hex) {
+  let v = rgbCache.get(hex);
+  if (!v) { const n = parseInt(hex.slice(1), 16); v = [(n >> 16) & 255, (n >> 8) & 255, n & 255]; rgbCache.set(hex, v); }
+  return v;
+}
+function shade(hex, f) {
+  const [r, g, b] = hexRgb(hex), cl = (x) => Math.max(0, Math.min(255, Math.round(x)));
+  return `rgb(${cl(r * f)},${cl(g * f)},${cl(b * f)})`;
+}
+const colorSeed = (hex) => parseInt(hex.slice(1), 16) % 9973;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+// ---------------------------------------------------------------------------
+// Doğal boyalar
+// ---------------------------------------------------------------------------
+const RED = "#9b2b23", IND = "#1f2c55", YEL = "#d4a033", WAL = "#5a3a25", CRM = "#eee2c6", BLK = "#221b17", GRN = "#4b6b3a", ORA = "#c76628";
+const PALETTE = [
+  ["Kök boya kırmızısı", RED], ["Lacivert (çivit)", IND], ["Cehri sarısı", YEL], ["Ceviz kahvesi", WAL],
+  ["Krem / beyaz", CRM], ["Siyah", BLK], ["Yeşil", GRN], ["Turuncu", ORA],
+];
+
+// ---------------------------------------------------------------------------
+// Motif şablonları (prosedürel, simetrik piksel ızgaraları)
+// Tasarım koordinatı: x 0..47 soldan, y 0..71 yukarıdan. Izgarada r=0 en alt sıra.
+// ---------------------------------------------------------------------------
+const tri = (v, p) => { const m = ((v % p) + p) % p; return Math.abs(m - p / 2) / (p / 2); };
+const edgeDist = (x, y) => Math.min(x, COLS - 1 - x, y, ROWS - 1 - y);
+const liteFrame = (cols) => (x, y) => { const d = edgeDist(x, y); return d < cols.length ? cols[d] : null; };
+/** Su yolu bordürü: kenar + zikzak su yolu bandı + ince şerit (toplam 9 hücre). */
+const suyoluFrame = (o) => (x, y) => {
+  const dl = Math.min(x, COLS - 1 - x), dt = Math.min(y, ROWS - 1 - y), d = Math.min(dl, dt);
+  if (d < 2) return o.edge;
+  if (d < 8) {
+    const across = d - 2, along = dl <= dt ? y : x, z = tri(along, 8) * 5;
+    if (Math.abs(across - z) < 0.85) return o.line;
+    if (o.dot && Math.abs(across - (5 - z)) < 0.5 && along % 8 === 4) return o.dot;
+    return o.bg;
+  }
+  if (d === 8) return o.stripe;
+  return null;
+};
+const mir = (half) => half.map((s) => s + [...s.slice(0, -1)].reverse().join(""));
+/** Bitmap motif: satırlar dikeyde 1/A kat uzatılır (hücreler yatay olduğu için). */
+function bitmap(rows, map, flip = false) {
+  const w = rows[0].length, sy = 1 / A, H = rows.length * sy;
+  return (dx, dy) => {
+    if (flip) dy = -dy;
+    const col = Math.round(dx + (w - 1) / 2), ri = Math.floor((dy + H / 2) / sy);
+    if (col < 0 || col >= w || ri < 0 || ri >= rows.length) return null;
+    return map[rows[ri][col]] || null;
+  };
+}
+/** Prosedürel motif: ax = |dx|, ay = |dy|·A (ikisi de "kare" birim). */
+const proc = (fn) => (dx, dy) => fn(Math.abs(dx), Math.abs(dy) * A);
+
+const ELIBELINDE = mir([
+  ".......a", "......ab", ".....aab", "......ab", ".......a", "...aaaaa", "..a..aab", ".a...aab",
+  ".a....ab", "..a..aab", "...aaaab", "....aaab", "...aaaab", "..aaaabb", ".aaaaaab", "aaaaaaaa",
+]);
+const KOCBOYNUZU = mir([
+  "..aaa...", ".a...a..", "a..b..a.", "a.bb..a.", "a.....a.", ".a...a.a", "..aaaaaa",
+  ".....aab", "....aabb", ".....aab", "......aa", ".......a",
+]);
+const gozFn = (ax, ay) => {
+  const d = ax + ay;
+  if (d <= 1.0) return BLK; if (d <= 2.4) return CRM; if (d <= 3.9) return IND; if (d <= 5.2) return YEL; if (d <= 6.2) return IND;
+  if ((ay < 0.5 && d <= 8.5) || (ax < 1 && d <= 7.4)) return IND;
+  return null;
+};
+const starFn = (R, body, mid, core) => (ax, ay) => {
+  if (!(Math.max(ax, ay) <= R * 0.66 || ax + ay <= R)) return null;
+  const d = ax + ay;
+  return d <= R * 0.3 ? core : d <= R * 0.62 ? mid : body;
+};
+const pitrakFn = (R, main, accent, hook) => (ax, ay) => {
+  const d = ax + ay;
+  if (d <= 1) return accent; if (d <= 2.6) return main;
+  if ((ax <= 1 && ay <= R) || (ay <= 0.8 && ax <= R)) return main;
+  if (Math.abs(ax - R) + ay <= 1.8 || ax + Math.abs(ay - R) <= 1.8) return hook;
+  if (Math.abs(ax - R * 0.62) + Math.abs(ay - R * 0.62) <= 0.9) return hook;
+  return null;
+};
+const medallionFn = (ax, ay) => {
+  if (ay > 6.4) return null;
+  const d = ax + ay;
+  if (d <= 1.2) return CRM; if (d <= 2.8) return RED; if (d <= 4.2) return YEL; if (d <= 5.6) return IND; if (d <= 6.8) return CRM; if (d <= 8.6) return IND;
+  if (d <= 10.2 && Math.round(ay / A) % 3 === 0) return IND; // koçboynuzu dişleri
+  return null;
+};
+
+function makeGrid(frame, inst, field) {
+  const g = new Array(ROWS * COLS);
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+    let v = frame ? frame(x, y) : null;
+    if (!v) for (const m of inst) { v = m.f(x - m.cx, y - m.cy); if (v) break; }
+    if (!v) v = typeof field === "function" ? field(x, y) : field;
+    g[(ROWS - 1 - y) * COLS + x] = v;
+  }
+  return g;
+}
+
+const DESIGNS = {
+  elibelinde: { label: "🙆 Elibelinde", hint: "annelik, bereket", build() {
+    const m1 = bitmap(ELIBELINDE, { a: CRM, b: IND }), m2 = bitmap(ELIBELINDE, { a: YEL, b: IND });
+    const inst = [];
+    [15, 36, 57].forEach((cy, i) => { inst.push({ cx: 13, cy, f: i % 2 ? m2 : m1 }, { cx: 34, cy, f: i % 2 ? m1 : m2 }); });
+    return makeGrid(liteFrame([WAL, WAL, CRM, IND]), inst, RED);
+  } },
+  kocboynuzu: { label: "🐏 Koçboynuzu", hint: "güç, kahramanlık", build() {
+    const inst = [];
+    [12, 28, 44, 60].forEach((cy, i) => {
+      const map = i % 2 ? { a: YEL, b: RED } : { a: CRM, b: RED };
+      inst.push({ cx: 13, cy, f: bitmap(KOCBOYNUZU, map, i % 2 === 1) }, { cx: 34, cy, f: bitmap(KOCBOYNUZU, map, i % 2 === 1) });
+    });
+    [20, 36, 52].forEach((cy) => inst.push({ cx: 23.5, cy, f: proc((ax, ay) => (ax + ay <= 2 ? ORA : null)) }));
+    return makeGrid(liteFrame([WAL, WAL, RED, YEL]), inst, IND);
+  } },
+  goz: { label: "🧿 Göz (nazar)", hint: "kem gözden korur", build() {
+    const inst = [];
+    [9.5, 22.5, 35.5, 48.5, 61.5].forEach((cy, i) => {
+      if (i % 2 === 0) inst.push({ cx: 13.5, cy, f: proc(gozFn) }, { cx: 33.5, cy, f: proc(gozFn) });
+      else inst.push({ cx: 23.5, cy, f: proc(gozFn) });
+    });
+    return makeGrid(liteFrame([BLK, BLK, CRM, IND]), inst, RED);
+  } },
+  suyolu: { label: "🌊 Su yolu", hint: "bordür, hayat suyu", build() {
+    const sets = [{ bg: CRM, line: RED, dot: IND }, { bg: IND, line: CRM, dot: YEL }, { bg: RED, line: YEL, dot: CRM }, { bg: GRN, line: CRM, dot: ORA }];
+    const field = (x, y) => {
+      const b = Math.floor((y - 2) / 17), ly = (y - 2) % 17, s = sets[b % sets.length];
+      if (ly === 0 || ly === 16) return BLK;
+      if (ly === 1 || ly === 15) return YEL;
+      const zz = 4 + tri(x + b * 6, 12) * 7;
+      if (Math.abs(ly - zz) < 1.5) return s.line;
+      if (Math.abs(ly - zz - 3) < 0.5 && x % 4 === 0) return s.dot;
+      if (Math.abs(ly - zz + 3) < 0.5 && x % 4 === 2) return s.dot;
+      return s.bg;
+    };
+    return makeGrid(liteFrame([WAL, WAL]), [], field);
+  } },
+  yildiz: { label: "⭐ Yıldız", hint: "mutluluk, umut", build() {
+    const s1 = proc(starFn(6, YEL, RED, CRM)), s2 = proc(starFn(6, CRM, GRN, RED));
+    const inst = [];
+    [19.5, 35.5, 51.5].forEach((cy, i) => inst.push({ cx: 17.5, cy, f: i % 2 ? s2 : s1 }, { cx: 30.5, cy, f: i % 2 ? s1 : s2 }));
+    return makeGrid(suyoluFrame({ edge: WAL, bg: RED, line: YEL, stripe: CRM }), inst, IND);
+  } },
+  bereket: { label: "🌾 Bereket / pıtrak", hint: "bolluk, korunma", build() {
+    const f = proc(pitrakFn(5, CRM, RED, YEL));
+    const inst = [];
+    [13.5, 35.5, 57.5].forEach((cy) => inst.push({ cx: 13.5, cy, f }, { cx: 33.5, cy, f }));
+    [24.5, 46.5].forEach((cy) => inst.push({ cx: 23.5, cy, f }));
+    return makeGrid(liteFrame([WAL, WAL, YEL, RED]), inst, GRN);
+  } },
+  tam: { label: "🏺 Tam kilim", hint: "bordür + madalyonlar", build() {
+    const inst = [19, 36, 53].map((cy) => ({ cx: 23.5, cy, f: proc(medallionFn) }));
+    const st = proc(starFn(2.6, YEL, CRM, RED));
+    [13, 27.5, 44.5, 59].forEach((cy) => inst.push({ cx: 12, cy, f: st }, { cx: 35, cy, f: st }));
+    return makeGrid(suyoluFrame({ edge: WAL, bg: CRM, line: IND, dot: RED, stripe: BLK }), inst, RED);
+  } },
+};
+const tplCache = {};
+const getTemplate = (k) => (tplCache[k] ||= DESIGNS[k].build());
+
+// ---------------------------------------------------------------------------
+// Durum
+// ---------------------------------------------------------------------------
+let cells = new Array(ROWS * COLS).fill(null);
+let row = 0;                     // şu an dokunan sıra (0 = en alt)
+let mode = "free", patternKey = "tam", tpl = null;
+let color = PALETTE[0][1];
+let beatAnim = null;             // { t, x, hit }
+let finishOpen = false;
+let clearedBackup = null;
+
+const rowHasCells = (r) => { for (let c = 0; c < COLS; c++) if (cells[r * COLS + c]) return true; return false; };
+
+// ---------------------------------------------------------------------------
+// Statik tezgâh: ahşap direkler, levendler, çözgüler, gücü ve ağızlık çubuğu
+// ---------------------------------------------------------------------------
+function wood(g, x, y, w, h, horizontal, seed) {
+  const gr = horizontal ? g.createLinearGradient(0, y, 0, y + h) : g.createLinearGradient(x, 0, x + w, 0);
+  gr.addColorStop(0, "#3d2513"); gr.addColorStop(0.22, "#7c512c"); gr.addColorStop(0.5, "#a46f40"); gr.addColorStop(0.8, "#6b4224"); gr.addColorStop(1, "#331e0f");
+  g.save();
+  g.beginPath(); g.roundRect(x, y, w, h, Math.min(8, w / 3, h / 3)); g.fillStyle = gr; g.fill(); g.clip();
+  g.lineWidth = 1;
+  for (let i = 0; i < 26; i++) {
+    const t = hrand(seed, i);
+    g.strokeStyle = `rgba(35,18,6,${0.08 + 0.14 * hrand(seed, i, 3)})`;
+    g.beginPath();
+    if (horizontal) { const yy = y + t * h; g.moveTo(x, yy); for (let s = 0; s <= w; s += 30) g.lineTo(x + s, yy + Math.sin(s * 0.013 + i) * 1.4); }
+    else { const xx = x + t * w; g.moveTo(xx, y); for (let s = 0; s <= h; s += 30) g.lineTo(xx + Math.sin(s * 0.011 + i) * 1.4, y + s); }
+    g.stroke();
+  }
+  // budak
+  for (let k = 0; k < 2; k++) {
+    const bx = horizontal ? x + hrand(seed, 50 + k) * w : x + w / 2, by = horizontal ? y + h / 2 : y + hrand(seed, 50 + k) * h;
+    g.strokeStyle = "rgba(40,20,8,.35)"; g.beginPath(); g.ellipse(bx, by, horizontal ? 9 : 4, horizontal ? 4 : 9, 0, 0, Math.PI * 2); g.stroke();
+  }
+  g.restore();
+}
+
+function drawWarp(g, x, y0, y1) {
+  g.lineCap = "butt";
+  g.strokeStyle = "rgba(0,0,0,.28)"; g.lineWidth = 4; g.beginPath(); g.moveTo(x + 2, y0); g.lineTo(x + 2, y1); g.stroke();
+  g.strokeStyle = "#b19f7d"; g.lineWidth = 4.2; g.beginPath(); g.moveTo(x, y0); g.lineTo(x, y1); g.stroke();
+  g.strokeStyle = "#efe5cd"; g.lineWidth = 2.2; g.beginPath(); g.moveTo(x - 0.6, y0); g.lineTo(x - 0.6, y1); g.stroke();
+}
+
+function buildLoom() {
+  const g = loomLayer.getContext("2d");
+  g.clearRect(0, 0, LW, LH);
+  // dikey direkler
+  wood(g, 30, 6, 56, LH - 12, false, 1);
+  wood(g, LW - 86, 6, 56, LH - 12, false, 2);
+  // üst ve alt levent
+  wood(g, 12, 28, LW - 24, 46, true, 3);
+  wood(g, 12, 1026, LW - 24, 48, true, 4);
+  // kama/çivi
+  for (const [px, py] of [[58, 51], [LW - 58, 51], [58, 1050], [LW - 58, 1050]]) {
+    g.fillStyle = "#2a1a0e"; g.beginPath(); g.arc(px, py, 9, 0, Math.PI * 2); g.fill();
+    g.fillStyle = "#8a6a45"; g.beginPath(); g.arc(px - 2, py - 2, 5, 0, Math.PI * 2); g.fill();
+  }
+  // çözgüler leventlerin önünden geçer
+  for (let c = 0; c < COLS; c++) drawWarp(g, warpX(c), 40, 1062);
+  // levent üzerindeki sarım halkaları
+  for (let c = 0; c < COLS; c++) {
+    const x = warpX(c);
+    for (const yy of [40, 1062]) { g.fillStyle = "rgba(239,229,205,.9)"; g.beginPath(); g.ellipse(x, yy, 2.6, 4, 0, 0, Math.PI * 2); g.fill(); }
+  }
+  // gücü çubuğu (çift çözgüleri ilmekle tutar)
+  const HY = 100;
+  g.strokeStyle = "rgba(255,255,255,.55)"; g.lineWidth = 1;
+  for (let c = 0; c < COLS; c += 2) { const x = warpX(c); g.beginPath(); g.moveTo(x - 2, HY); g.quadraticCurveTo(x, HY + 16, x + 2, HY); g.stroke(); }
+  wood(g, KX0 - 40, HY - 5, KW + 80, 10, true, 5);
+  // ağızlık çubuğu: tek çözgüler önünden geçer
+  const SY = 124;
+  wood(g, KX0 - 34, SY, KW + 68, 14, true, 6);
+  for (let c = 1; c < COLS; c += 2) drawWarp(g, warpX(c), SY - 4, SY + 18);
+  // kilim alanının sınırı (çok hafif)
+  g.strokeStyle = "rgba(255,240,210,.10)"; g.setLineDash([4, 6]); g.strokeRect(KX0 - 2, KY_TOP, KW + 4, KH); g.setLineDash([]);
+}
+
+// ---------------------------------------------------------------------------
+// Atkı hücresi: yuvarlak kabarcık, tek/çift sıra yarım hücre kaydırmalı,
+// yün lifi gürültüsü, abraş (sıradan sıraya boya tonu farkı), yarık (slit) çizgisi
+// ---------------------------------------------------------------------------
+function makeBump(parity) {
+  const c = document.createElement("canvas"); c.width = CW; c.height = CH;
+  const g = c.getContext("2d");
+  const centers = parity ? [0, CW] : [CW / 2];
+  for (const bx of centers) {
+    const gr = g.createRadialGradient(bx, CH * 0.42, 0, bx, CH * 0.5, CW * 0.62);
+    gr.addColorStop(0, "rgba(255,255,255,.32)"); gr.addColorStop(0.35, "rgba(255,255,255,.07)");
+    gr.addColorStop(0.72, "rgba(0,0,0,.10)"); gr.addColorStop(1, "rgba(0,0,0,.42)");
+    g.save(); g.beginPath();
+    if (parity) g.rect(bx === 0 ? 0 : CW / 2, 0, CW / 2, CH); else g.rect(0, 0, CW, CH);
+    g.clip(); g.fillStyle = gr; g.fillRect(0, 0, CW, CH);
+    // ip bükümü: çapraz ince çizgiler
+    g.strokeStyle = "rgba(255,255,255,.13)"; g.lineWidth = 0.9;
+    for (let k = -2; k <= 2; k++) { g.beginPath(); g.moveTo(bx + k * 3.2 - 2, CH - 2); g.lineTo(bx + k * 3.2 + 2, 2); g.stroke(); }
+    g.restore();
+  }
+  g.fillStyle = "rgba(0,0,0,.22)"; g.fillRect(0, 0, CW, 1);
+  g.fillStyle = "rgba(0,0,0,.30)"; g.fillRect(0, CH - 1, CW, 1);
+  return c;
+}
+const BUMPS = [makeBump(0), makeBump(1)];
+
+function renderCell(r, c) {
+  const g = wctx, x = KX0 + c * CW, y = rowTop(r), i = r * COLS + c, col = cells[i];
+  g.clearRect(x, y, CW, CH);
+  if (!col) return;
+  const f = (1 + (hrand(r, colorSeed(col), 9) - 0.5) * 0.09) * (1 + (hrand(r, c, 1) - 0.5) * 0.05);
+  g.save();
+  g.beginPath(); g.rect(x, y, CW, CH); g.clip();
+  g.fillStyle = shade(col, f); g.fillRect(x, y, CW, CH);
+  g.drawImage(BUMPS[r % 2], x, y);
+  g.lineWidth = 0.8;
+  for (let k = 0; k < 4; k++) {
+    const rx = x + hrand(r, c, 10 + k) * CW, ry = y + 2 + hrand(r, c, 20 + k) * (CH - 4);
+    g.strokeStyle = k % 2 ? "rgba(255,255,255,.16)" : "rgba(0,0,0,.16)";
+    g.beginPath(); g.moveTo(rx, ry); g.lineTo(rx + 2.5 + hrand(r, c, 30 + k) * 2, ry - 1.5); g.stroke();
+  }
+  const L = c > 0 ? cells[i - 1] : null, R = c < COLS - 1 ? cells[i + 1] : null;
+  g.fillStyle = "rgba(25,12,5,.5)";
+  if (L && L !== col) g.fillRect(x, y, 1.2, CH);
+  if (R && R !== col) g.fillRect(x + CW - 1.2, y, 1.2, CH);
+  g.restore();
+}
+function renderWovenAll() {
+  wctx.clearRect(0, 0, LW, LH);
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (cells[r * COLS + c]) renderCell(r, c);
+}
+function renderTemplateLayer() {
+  tctx.clearRect(0, 0, LW, LH);
+  if (!tpl) return;
+  tctx.globalAlpha = 0.42;
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    tctx.fillStyle = tpl[r * COLS + c];
+    tctx.fillRect(KX0 + c * CW + 1.5, rowTop(r) + 1.5, CW - 3, CH - 3);
+  }
+  tctx.globalAlpha = 1;
+}
+
+// ---------------------------------------------------------------------------
+// Dokuma: mekik (atkı geçirme) ve kirkit (sıkıştırma)
+// ---------------------------------------------------------------------------
+const colorFor = (c) => (mode === "pattern" && tpl ? tpl[row * COLS + c] : color);
+
+function weaveCell(c, col, rec) {
+  if (row >= ROWS || c < 0 || c >= COLS) return false;
+  const i = row * COLS + c;
+  if (cells[i] === col) return false;
+  if (rec) rec.push([i, cells[i]]);
+  cells[i] = col;
+  renderCell(row, c);
+  if (c > 0) renderCell(row, c - 1);
+  if (c < COLS - 1) renderCell(row, c + 1);
+  clearedBackup = null;
+  return true;
+}
+/** Şu anki sırada c0..c1 çözgülerine atkı geçir. col verilmezse mod rengini kullanır. */
+function weaveSegment(c0, c1, col = null, rec = null) {
+  if (row >= ROWS || beatAnim || finishOpen) return 0;
+  const a = Math.max(0, Math.min(c0, c1)), b = Math.min(COLS - 1, Math.max(c0, c1));
+  let n = 0;
+  for (let c = a; c <= b; c++) if (weaveCell(c, col ?? colorFor(c), rec)) n++;
+  if (n) updateProgress();
+  return n;
+}
+function revertCells(rec) {
+  const touched = new Set();
+  for (let k = rec.length - 1; k >= 0; k--) { const [i, prev] = rec[k]; cells[i] = prev; touched.add(i); }
+  for (const i of touched) {
+    const r = Math.floor(i / COLS), c = i % COLS;
+    renderCell(r, c); if (c > 0) renderCell(r, c - 1); if (c < COLS - 1) renderCell(r, c + 1);
+  }
+  updateProgress();
+}
+
+const stroke = { active: false, sx: 0, sy: 0, lx: 0, ly: 0, absDx: 0, rec: [], done: false, anchorC: null };
+
+function weaveAlong(ax, ay, bx, by) {
+  if (row >= ROWS || beatAnim || finishOpen) return;
+  if (Math.abs((ay + by) / 2 - rowCenter()) > BAND) return;
+  const c0 = colAt(ax), c1 = colAt(bx);
+  if ((c0 < 0 && c1 < 0) || (c0 >= COLS && c1 >= COLS)) return;
+  const n = weaveSegment(c0, c1, null, stroke.rec);
+  if (n && stroke.anchorC === null) stroke.anchorC = clamp(c0, 0, COLS - 1);
+}
+
+function strokeStart(x, y) {
+  Object.assign(stroke, { active: true, sx: x, sy: y, lx: x, ly: y, absDx: 0, rec: [], done: false, anchorC: null });
+  weaveAlong(x, y, x, y);
+}
+function strokeMove(x, y) {
+  if (!stroke.active) return;
+  if (stroke.done || beatAnim) { stroke.lx = x; stroke.ly = y; return; }
+  stroke.absDx += Math.abs(x - stroke.lx);
+  const down = y - stroke.sy;
+  // Kirkit hareketi: sıranın altına doğru belirgin, çoğunlukla dikey bir çekiş
+  if (row < ROWS && down > 70 && stroke.absDx < down * 0.6 && y > rowCenter() + 30) {
+    if (stroke.rec.length) revertCells(stroke.rec);
+    stroke.rec = []; stroke.done = true; stroke.anchorC = null;
+    beat({ x });
+  } else weaveAlong(stroke.lx, stroke.ly, x, y);
+  stroke.lx = x; stroke.ly = y;
+}
+function strokeEnd() {
+  if (!stroke.active) return;
+  stroke.active = false;
+  if (stroke.rec.length && !stroke.done) {
+    const n = new Set(stroke.rec.map((e) => e[0])).size;
+    setStatus(`${n} çözgüye atkı geçti. Sırayı bitirince kirkitle: aşağı çek ya da Boşluk.`);
+  }
+}
+
+function beat(opts = {}) {
+  if (finishOpen || beatAnim) return false;
+  if (row >= ROWS) { setStatus("Tezgâh doldu! ✂️ Kilimi bitir."); return false; }
+  if (!rowHasCells(row)) { setStatus("Bu sırada henüz atkı yok — önce mekiği sıranın üzerinden geçir."); return false; }
+  if (opts.instant) { row++; afterBeat(); return true; }
+  beatAnim = { t: 0, x: opts.x ?? (KX0 + KX1) / 2, hit: false };
+  return true;
+}
+function afterBeat() {
+  updateProgress();
+  if (row >= ROWS) setStatus("Son sıra da sıkıştırıldı! Kilim hazır — ✂️ Kilimi bitir.");
+  else setStatus(`Tak tak! ${row}. sıra sıkıştırıldı. Sıradaki: ${row + 1}/${ROWS}.`);
+}
+
+function clearRow(r) {
+  for (let c = 0; c < COLS; c++) cells[r * COLS + c] = null;
+  for (let c = 0; c < COLS; c++) renderCell(r, c);
+}
+function undo() {
+  if (beatAnim || finishOpen) return;
+  if (row < ROWS && rowHasCells(row)) { clearRow(row); setStatus("Bu sıradaki atkı söküldü."); }
+  else if (row > 0) { row--; setStatus(`${row + 1}. sıranın kirkiti geri alındı; tekrar Geri al ile atkısını sökebilirsin.`); }
+  else if (clearedBackup) { cells = clearedBackup.cells; row = clearedBackup.row; clearedBackup = null; renderWovenAll(); setStatus("Temizleme geri alındı."); }
+  else setStatus("Geri alınacak bir şey yok.");
+  updateProgress();
+}
+function clearAll() {
+  if (beatAnim) return;
+  if (!cells.some(Boolean)) { row = 0; updateProgress(); return; }
+  clearedBackup = { cells: cells.slice(), row };
+  cells = new Array(ROWS * COLS).fill(null); row = 0;
+  renderWovenAll(); updateProgress();
+  setStatus("Tezgâh temizlendi — çözgüler yeni kilimi bekliyor. (Geri al ile geri getirebilirsin.)");
+}
+
+function progress() {
+  let n = 0;
+  if (mode === "pattern" && tpl) { for (let i = 0; i < cells.length; i++) if (cells[i] && cells[i] === tpl[i]) n++; }
+  else for (let i = 0; i < cells.length; i++) if (cells[i]) n++;
+  return Math.round((n / cells.length) * 1000) / 10;
+}
+function updateProgress() {
+  const p = progress();
+  document.getElementById("progBar").style.width = p + "%";
+  const what = mode === "pattern" ? `${DESIGNS[patternKey].label.replace(/^\S+\s/, "")} deseni` : "kilim";
+  document.getElementById("progText").textContent = `Sıra ${Math.min(row + 1, ROWS)}/${ROWS} · ${what} %${p} dokundu`;
+}
+
+// ---------------------------------------------------------------------------
+// Mod, desen ve renk seçimi
+// ---------------------------------------------------------------------------
+const patEl = document.getElementById("patterns");
+for (const [k, d] of Object.entries(DESIGNS)) {
+  const b = document.createElement("button");
+  b.dataset.pattern = k; b.innerHTML = `${d.label} <small>${d.hint}</small>`;
+  b.onclick = () => setPattern(k);
+  patEl.appendChild(b);
+}
+function setMode(m) {
+  mode = m;
+  document.querySelectorAll("#tools [data-mode]").forEach((b) => b.classList.toggle("on", b.dataset.mode === m));
+  const showPat = m === "pattern";
+  patEl.classList.toggle("hidden", !showPat);
+  document.getElementById("patGrp").classList.toggle("hidden", !showPat);
+  if (showPat) { tpl = getTemplate(patternKey); renderTemplateLayer(); markPattern(); setStatus(`Desenli: ${DESIGNS[patternKey].label}. Mekiği süpür — renkler şablondan otomatik gelir.`); }
+  else { tpl = null; renderTemplateLayer(); setStatus("Serbest: alttan bir renk seç ve sıranın üzerinden mekiği geçir."); }
+  updateProgress(); layout();
+}
+function markPattern() { patEl.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.pattern === patternKey)); }
+function setPattern(k) {
+  if (!DESIGNS[k]) return false;
+  patternKey = k;
+  if (mode !== "pattern") setMode("pattern");
+  else { tpl = getTemplate(k); renderTemplateLayer(); markPattern(); updateProgress(); setStatus(`Desen: ${DESIGNS[k].label} — ${DESIGNS[k].hint}. Şablon çözgülerde silik görünüyor.`); }
+  return true;
+}
+document.querySelectorAll("#tools [data-mode]").forEach((b) => (b.onclick = () => setMode(b.dataset.mode)));
+
+const palEl = document.getElementById("palette");
+PALETTE.forEach(([name, c], i) => {
+  const b = document.createElement("button");
+  b.className = "swatch" + (i === 0 ? " on" : "");
+  b.style.background = c; b.title = name; b.dataset.color = c;
+  b.onclick = () => selectColor(c, name);
+  palEl.appendChild(b);
+});
+document.getElementById("custom").oninput = (e) => selectColor(e.target.value, "Özel renk");
+function selectColor(c, name = "Renk") {
+  color = c;
+  palEl.querySelectorAll(".swatch").forEach((s) => s.classList.toggle("on", s.dataset.color === c));
+  setStatus(mode === "pattern" ? `Yün: ${name} (Desenli modda renkler şablondan gelir — Serbest'e geçince kullanılır).` : `Yün: ${name}`);
+}
+
+// ---------------------------------------------------------------------------
+// Bitiş: tezgâhtan kes, saçakları düğümle, PNG indir
+// ---------------------------------------------------------------------------
+const finCanvas = document.getElementById("finCanvas");
+function renderFinished(nr) {
+  const H0 = nr * CH, FR = 62, PAD = 54;
+  const W = KW + PAD * 2 + 40, H = H0 + (FR + PAD) * 2;
+  finCanvas.width = W; finCanvas.height = H;
+  const g = finCanvas.getContext("2d");
+  const bg = g.createLinearGradient(0, 0, W, H); bg.addColorStop(0, "#efe7d8"); bg.addColorStop(1, "#d6c8b1");
+  g.fillStyle = bg; g.fillRect(0, 0, W, H);
+  const x0 = (W - KW) / 2, y0 = PAD + FR;
+  // yumuşak gölge
+  g.save(); g.shadowColor = "rgba(45,25,10,.45)"; g.shadowBlur = 36; g.shadowOffsetY = 16; g.fillStyle = "#cbbd9d"; g.fillRect(x0, y0, KW, H0); g.restore();
+  // boş kalan yerlerde çıplak çözgü
+  g.fillStyle = "#d9cdb1"; g.fillRect(x0, y0, KW, H0);
+  for (let c = 0; c < COLS; c++) { g.fillStyle = "#efe5cd"; g.fillRect(x0 + (c + 0.5) * CW - 1.6, y0, 3.2, H0); }
+  // dokuma
+  g.drawImage(wovenLayer, KX0, rowTop(nr - 1), KW, H0, x0, y0, KW, H0);
+  // kenar (zincir) ve hafif ışık
+  const sheen = g.createLinearGradient(x0, y0, x0 + KW, y0 + H0);
+  sheen.addColorStop(0, "rgba(255,255,255,.07)"); sheen.addColorStop(0.5, "rgba(255,255,255,0)"); sheen.addColorStop(1, "rgba(0,0,0,.08)");
+  g.fillStyle = sheen; g.fillRect(x0, y0, KW, H0);
+  g.fillStyle = "rgba(30,15,5,.35)"; g.fillRect(x0, y0, 2, H0); g.fillRect(x0 + KW - 2, y0, 2, H0);
+  // uç örgüsü + düğümlü saçaklar
+  for (const top of [true, false]) {
+    const dir = top ? -1 : 1, ey = top ? y0 : y0 + H0;
+    g.strokeStyle = "#4a2f1c"; g.lineWidth = 1.6;
+    for (let c = 0; c < COLS; c++) { const x = x0 + c * CW; g.beginPath(); g.moveTo(x + 3, ey - dir * 1); g.lineTo(x + CW - 3, ey + dir * 4); g.stroke(); }
+    for (let gi = 0; gi < COLS / 4; gi++) {
+      const xs = [0, 1, 2, 3].map((k) => x0 + (gi * 4 + k + 0.5) * CW), kx = (xs[0] + xs[3]) / 2, ky = ey + dir * 16;
+      g.lineCap = "round";
+      for (const x of xs) {
+        g.strokeStyle = "#b8a684"; g.lineWidth = 3; g.beginPath(); g.moveTo(x, ey + dir * 3); g.quadraticCurveTo(x, ky - dir * 6, kx, ky); g.stroke();
+        g.strokeStyle = "#efe5cd"; g.lineWidth = 1.7; g.beginPath(); g.moveTo(x, ey + dir * 3); g.quadraticCurveTo(x, ky - dir * 6, kx, ky); g.stroke();
+      }
+      for (let s = 0; s < 6; s++) {
+        const sx = kx + (s - 2.5) * 2.6, len = 34 + hrand(gi, s, top ? 1 : 2) * 16, wob = (hrand(gi, s, 5) - 0.5) * 9;
+        g.strokeStyle = s % 2 ? "#e7dcc2" : "#cfc0a0"; g.lineWidth = 1.7;
+        g.beginPath(); g.moveTo(kx + (s - 2.5) * 1.2, ky); g.quadraticCurveTo(sx + wob, ky + dir * len * 0.6, sx + wob * 0.6, ky + dir * len); g.stroke();
+      }
+      g.fillStyle = "#d8caa9"; g.beginPath(); g.ellipse(kx, ky, 5.5, 4.5, 0, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = "#9c8a68"; g.lineWidth = 1; g.stroke();
+      g.fillStyle = "rgba(255,255,255,.5)"; g.beginPath(); g.arc(kx - 1.5, ky - 1.5, 1.6, 0, Math.PI * 2); g.fill();
+    }
+  }
+  return finCanvas;
+}
+function finish() {
+  if (beatAnim) return false;
+  const nr = row + (row < ROWS && rowHasCells(row) ? 1 : 0);
+  if (!nr) { setStatus("Önce biraz doku — tezgâhta henüz kilim yok."); return false; }
+  renderFinished(nr);
+  document.getElementById("finish").classList.remove("hidden");
+  finCanvas.style.animation = "none"; void finCanvas.offsetWidth; finCanvas.style.animation = "";
+  finishOpen = true;
+  setStatus(`✂️ Kilim tezgâhtan kesildi (${nr} sıra), saçakları düğümlendi!`);
+  return true;
+}
+function closeFinish() { document.getElementById("finish").classList.add("hidden"); finishOpen = false; setStatus("Tezgâha dönüldü — dokumaya devam edebilirsin."); }
+function downloadPNG() {
+  if (!finishOpen && !finish()) return;
+  const a = document.createElement("a");
+  a.download = `kilim-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.png`;
+  a.href = finCanvas.toDataURL("image/png"); a.click();
+  setStatus("Kilim PNG olarak indirildi. 🧶");
+}
+
+document.getElementById("btnUndo").onclick = undo;
+document.getElementById("btnBeat").onclick = () => beat({});
+document.getElementById("btnClear").onclick = clearAll;
+document.getElementById("btnFinish").onclick = finish;
+document.getElementById("btnDownload").onclick = downloadPNG;
+document.getElementById("btnBack").onclick = closeFinish;
+addEventListener("keydown", (e) => {
+  if (e.target instanceof HTMLInputElement) return;
+  if (e.code === "Space") { e.preventDefault(); beat({}); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); undo(); return; }
+  if (e.key === "Escape" && finishOpen) closeFinish();
+  const p = PALETTE[Number(e.key) - 1];
+  if (p && !e.ctrlKey && !e.metaKey) selectColor(p[1], p[0]);
+});
+
+// ---------------------------------------------------------------------------
+// Giriş: el (MediaPipe) + fare
+// ---------------------------------------------------------------------------
+const hands = [null, null];
+const mouse = { inside: false, down: false, x: 0, y: 0 };
+let landmarker = null, camOn = false, lastVideoTime = -1;
+const wasPinch = {};
+let owner = null; // vuruşu yapan girişin kimliği
+
+loom.addEventListener("pointerdown", (e) => { mouse.down = true; mouse.x = e.clientX; mouse.y = e.clientY; loom.setPointerCapture(e.pointerId); });
+addEventListener("pointermove", (e) => { mouse.x = e.clientX; mouse.y = e.clientY; mouse.inside = true; });
+addEventListener("pointerup", () => (mouse.down = false));
+addEventListener("pointercancel", () => (mouse.down = false));
+
+async function loadLandmarker() {
+  setStatus("El takibi modeli yükleniyor…");
+  const { FilesetResolver, HandLandmarker } = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs");
+  const files = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
+  const opts = (delegate) => ({
+    baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task", delegate },
+    runningMode: "VIDEO", numHands: 2, minHandDetectionConfidence: 0.6, minTrackingConfidence: 0.5,
+  });
+  try { return await HandLandmarker.createFromOptions(files, opts("GPU")); }
+  catch { return await HandLandmarker.createFromOptions(files, opts("CPU")); }
+}
+
+async function toggleCamera() {
+  const btn = document.getElementById("btnCam");
+  if (camOn) {
+    video.srcObject?.getTracks().forEach((t) => t.stop());
+    video.srcObject = null; video.classList.remove("on"); camOn = false; hands[0] = hands[1] = null;
+    btn.textContent = "📷 Kamera"; setStatus("Kamera kapalı."); return;
+  }
+  try {
+    btn.disabled = true;
+    if (!landmarker) landmarker = await loadLandmarker();
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" }, audio: false });
+    video.srcObject = stream; await video.play();
+    video.classList.add("on"); camOn = true; btn.textContent = "📷 Kapat";
+    setStatus("Elini göster. Pinch + yana süpür = mekik; pinch + aşağı çek = kirkit; düğmelerin üstünde pinch = seç.");
+  } catch (err) {
+    console.error(err);
+    setStatus("Kamera açılamadı: " + (err?.message || err) + " — fareyle devam edebilirsin.");
+  } finally { btn.disabled = false; }
+}
+document.getElementById("btnCam").onclick = toggleCamera;
+
+function videoToScreen(nx, ny) {
+  const W = innerWidth, H = innerHeight, vw = video.videoWidth || 1280, vh = video.videoHeight || 720;
+  const s = Math.max(W / vw, H / vh), dw = vw * s, dh = vh * s;
+  return { x: (W - dw) / 2 + (1 - nx) * dw, y: (H - dh) / 2 + ny * dh };
+}
+
+// --- Kararlı el işaretçisi -------------------------------------------------
+// One Euro filtresi: el yavaşken titreşimi güçlü biçimde bastırır,
+// hızlı hareket ederken gecikmeyi azaltır.
+class OneEuro {
+  constructor(minCutoff = 1.0, beta = 0.004, dCutoff = 1.0) { Object.assign(this, { minCutoff, beta, dCutoff, x: null, dx: 0, t: 0 }); }
+  static alpha(cutoff, dt) { const tau = 1 / (2 * Math.PI * cutoff); return 1 / (1 + tau / dt); }
+  filter(x, t) {
+    if (this.x === null) { this.x = x; this.t = t; return x; }
+    const dt = Math.max(1e-3, t - this.t); this.t = t;
+    this.dx += OneEuro.alpha(this.dCutoff, dt) * ((x - this.x) / dt - this.dx);
+    const cutoff = this.minCutoff + this.beta * Math.abs(this.dx);
+    this.x += OneEuro.alpha(cutoff, dt) * (x - this.x);
+    return this.x;
+  }
+}
+const STABILITY = { minCutoff: 0.5, beta: 0.004 }; // minCutoff küçüldükçe daha durgun, beta büyüdükçe daha çevik
+const newHandFilter = () => ({ x: new OneEuro(STABILITY.minCutoff, STABILITY.beta), y: new OneEuro(STABILITY.minCutoff, STABILITY.beta), pinchVotes: 0, raw: null });
+const handFilters = [newHandFilter(), newHandFilter()];
+
+function readHands() {
+  if (!camOn || !landmarker || video.readyState < 2 || video.currentTime === lastVideoTime) return;
+  lastVideoTime = video.currentTime;
+  let lms = (landmarker.detectForVideo(video, performance.now()).landmarks || []).slice(0, 2);
+  // İki el varsa sıra kareden kareye değişebilir: önceki konumlara en yakın eşleşmeyi koru
+  if (lms.length === 2 && handFilters[0].raw && handFilters[1].raw) {
+    const d = (lm, f) => Math.hypot(lm[0].x - f.raw.x, lm[0].y - f.raw.y);
+    if (d(lms[0], handFilters[1]) + d(lms[1], handFilters[0]) < d(lms[0], handFilters[0]) + d(lms[1], handFilters[1])) lms = [lms[1], lms[0]];
+  }
+  const t = performance.now() / 1000;
+  for (let h = 0; h < 2; h++) {
+    const lm = lms[h];
+    if (!lm) { hands[h] = null; handFilters[h] = newHandFilter(); continue; }
+    const f = handFilters[h];
+    f.raw = { x: lm[0].x, y: lm[0].y };
+    const thumb = lm[4], index = lm[8], knuckle = lm[5];
+    // Sabit referans noktası: iki parmak ucu + işaret parmağı kökü.
+    // Pinch açılıp kapanırken iki uç simetrik yaklaştığı için nokta zıplamaz.
+    const nx = thumb.x * 0.35 + index.x * 0.35 + knuckle.x * 0.3;
+    const ny = thumb.y * 0.35 + index.y * 0.35 + knuckle.y * 0.3;
+    const sp = videoToScreen(nx, ny);
+    const x = f.x.filter(sp.x, t), y = f.y.filter(sp.y, t);
+    // Pinch: histerezis + durum değişikliği için 2 kare onay (titrek tıklamaları önler)
+    const size = Math.hypot(lm[0].x - lm[9].x, lm[0].y - lm[9].y) || 0.1;
+    const ratio = Math.hypot(thumb.x - index.x, thumb.y - index.y) / size;
+    const was = !!hands[h]?.pinch;
+    const want = was ? ratio < 0.45 : ratio < 0.32;
+    f.pinchVotes = want !== was ? f.pinchVotes + 1 : 0;
+    const pinch = f.pinchVotes >= 2 ? want : was;
+    if (f.pinchVotes >= 2) f.pinchVotes = 0;
+    hands[h] = { x, y, pinch };
+  }
+}
+
+function screenToLoom(x, y) {
+  const r = loom.getBoundingClientRect();
+  return { x: ((x - r.left) / r.width) * LW, y: ((y - r.top) / r.height) * LH, inside: x >= r.left && x <= r.right && y >= r.top && y <= r.bottom };
+}
+function loomToScreen(x, y) {
+  const r = loom.getBoundingClientRect();
+  return { x: r.left + (x / LW) * r.width, y: r.top + (y / LH) * r.height };
+}
+
+function inputs() {
+  const list = [];
+  hands.forEach((h, i) => h && list.push({ id: "h" + i, x: h.x, y: h.y, active: h.pinch, hand: true }));
+  if (!camOn || mouse.down) list.push({ id: "mouse", x: mouse.x, y: mouse.y, active: mouse.down, hand: false, show: mouse.inside });
+  return list;
+}
+
+function handleInput() {
+  const list = inputs();
+  for (const t of list) {
+    const started = t.active && !wasPinch[t.id];
+    // Elle pinch: düğmenin üstündeyse ona bas
+    if (started && t.hand) {
+      const el = document.elementFromPoint(t.x, t.y)?.closest("button, .swatch");
+      if (el) { el.click(); continue; }
+    }
+    const p = screenToLoom(t.x, t.y);
+    if (started && p.inside && !owner && !finishOpen) { owner = t.id; strokeStart(p.x, p.y); }
+  }
+  const o = owner && list.find((t) => t.id === owner);
+  if (owner && (!o || !o.active)) { strokeEnd(); owner = null; }
+  else if (o) { const p = screenToLoom(o.x, o.y); strokeMove(p.x, p.y); }
+  for (const id of ["h0", "h1", "mouse"]) wasPinch[id] = !!list.find((t) => t.id === id)?.active;
+  return list;
+}
+
+// ---------------------------------------------------------------------------
+// Çizim
+// ---------------------------------------------------------------------------
+const easeIn = (t) => t * t, easeOut = (t) => 1 - (1 - t) * (1 - t);
+
+function drawBeater(g, cx, tipY) {
+  const n = 14, span = n * CW;
+  cx = clamp(cx, KX0 + span / 2, KX1 - span / 2);
+  const left = cx - span / 2;
+  // dişler: çözgülerin arasından iner
+  for (let k = 0; k <= n; k++) {
+    const x = left + k * CW;
+    g.strokeStyle = "#5e4630"; g.lineWidth = 3.4; g.lineCap = "round";
+    g.beginPath(); g.moveTo(x, tipY - 40); g.lineTo(x, tipY); g.stroke();
+    g.strokeStyle = "rgba(255,230,190,.45)"; g.lineWidth = 1.2;
+    g.beginPath(); g.moveTo(x - 0.8, tipY - 40); g.lineTo(x - 0.8, tipY - 3); g.stroke();
+  }
+  wood(g, left - 12, tipY - 58, span + 24, 20, true, 7);
+  wood(g, cx - 16, tipY - 128, 32, 74, false, 8);
+  g.fillStyle = "#2a1a0e"; g.beginPath(); g.arc(cx, tipY - 48, 4, 0, Math.PI * 2); g.fill();
+}
+
+function draw(now = performance.now()) {
+  ctx.clearRect(0, 0, LW, LH);
+  ctx.drawImage(loomLayer, 0, 0);
+  if (mode === "pattern" && tpl) ctx.drawImage(tplLayer, 0, 0);
+  if (row < ROWS) {
+    const yc = rowTop(row);
+    const below = KY_BOTTOM - (yc + CH);
+    if (below > 0) ctx.drawImage(wovenLayer, KX0, yc + CH, KW, below, KX0, yc + CH, KW, below);
+    let off = LOOSE;
+    if (beatAnim) off = LOOSE * (1 - Math.min(1, beatAnim.t / 0.55));
+    // kirkitlenmemiş sıra: hafif yukarıda, altından çözgü görünür
+    ctx.drawImage(wovenLayer, KX0, yc, KW, CH, KX0, yc - off, KW, CH);
+    if (!finishOpen) {
+      // parlayan aktif sıra
+      const pulse = 0.65 + 0.35 * Math.sin(now / 260);
+      ctx.save();
+      ctx.strokeStyle = `rgba(255,214,120,${0.55 + 0.4 * pulse})`; ctx.lineWidth = 2.5;
+      ctx.shadowColor = "rgba(255,200,90,.9)"; ctx.shadowBlur = 12;
+      ctx.strokeRect(KX0 - 4, yc - off - 3, KW + 8, CH + 6);
+      ctx.fillStyle = "rgba(255,214,120,.95)";
+      const my = yc - off + CH / 2;
+      ctx.beginPath(); ctx.moveTo(KX0 - 20, my - 8); ctx.lineTo(KX0 - 8, my); ctx.lineTo(KX0 - 20, my + 8); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(KX1 + 20, my - 8); ctx.lineTo(KX1 + 8, my); ctx.lineTo(KX1 + 20, my + 8); ctx.fill();
+      ctx.restore();
+      // kirkit ipucu: sıra doluysa aşağı oklar
+      if (rowHasCells(row) && !beatAnim) {
+        ctx.save(); ctx.globalAlpha = 0.35 + 0.35 * pulse; ctx.strokeStyle = "#ffd678"; ctx.lineWidth = 3; ctx.lineCap = "round";
+        for (const ax of [KX1 + 26, KX0 - 26]) for (let k = 0; k < 2; k++) {
+          const ay = my + 16 + k * 12;
+          ctx.beginPath(); ctx.moveTo(ax - 7, ay); ctx.lineTo(ax, ay + 7); ctx.lineTo(ax + 7, ay); ctx.stroke();
+        }
+        ctx.restore();
+      }
+    }
+    if (beatAnim) {
+      const t = beatAnim.t, target = yc + CH - 1, start = yc - 90;
+      const p = t < 0.55 ? easeIn(t / 0.55) : 1 - easeOut((t - 0.55) / 0.45) * 0.9;
+      drawBeater(ctx, beatAnim.x, start + (target - start) * p);
+    }
+  } else ctx.drawImage(wovenLayer, 0, 0);
+}
+
+function drawShuttle(x, y, active, col, tilt, ds) {
+  const g = octx, L = clamp(170 * ds, 74, 150), H = L * 0.2;
+  g.save(); g.translate(x, y); g.rotate(tilt);
+  g.fillStyle = "rgba(0,0,0,.28)"; g.beginPath(); g.ellipse(4, H * 0.9, L * 0.48, H * 0.55, 0, 0, Math.PI * 2); g.fill();
+  const body = () => { g.beginPath(); g.moveTo(-L / 2, 0); g.quadraticCurveTo(-L * 0.3, -H, 0, -H); g.quadraticCurveTo(L * 0.3, -H, L / 2, 0); g.quadraticCurveTo(L * 0.3, H, 0, H); g.quadraticCurveTo(-L * 0.3, H, -L / 2, 0); g.closePath(); };
+  const gr = g.createLinearGradient(0, -H, 0, H); gr.addColorStop(0, "#d79e62"); gr.addColorStop(0.5, "#a96d38"); gr.addColorStop(1, "#5e3a1c");
+  body(); g.fillStyle = gr; g.fill(); g.strokeStyle = "#3b2311"; g.lineWidth = 1.2; g.stroke();
+  // yuva ve yumak
+  g.fillStyle = "#2c190b"; g.beginPath(); g.roundRect(-L * 0.27, -H * 0.5, L * 0.54, H, H * 0.4); g.fill();
+  g.fillStyle = col; g.beginPath(); g.roundRect(-L * 0.23, -H * 0.4, L * 0.46, H * 0.8, H * 0.35); g.fill();
+  g.strokeStyle = "rgba(0,0,0,.25)"; g.lineWidth = 1;
+  for (let k = -5; k <= 5; k++) { g.beginPath(); g.moveTo(k * L * 0.04 - 2, H * 0.38); g.lineTo(k * L * 0.04 + 2, -H * 0.38); g.stroke(); }
+  g.fillStyle = "rgba(255,255,255,.25)"; g.fillRect(-L * 0.2, -H * 0.32, L * 0.4, H * 0.14);
+  // pirinç uçlar
+  g.fillStyle = "#d8b45a";
+  g.beginPath(); g.moveTo(-L / 2, 0); g.lineTo(-L * 0.42, -H * 0.3); g.lineTo(-L * 0.42, H * 0.3); g.fill();
+  g.beginPath(); g.moveTo(L / 2, 0); g.lineTo(L * 0.42, -H * 0.3); g.lineTo(L * 0.42, H * 0.3); g.fill();
+  g.restore();
+  if (active) { g.strokeStyle = "rgba(255,255,255,.75)"; g.lineWidth = 2; g.beginPath(); g.arc(x, y, 14, 0, Math.PI * 2); g.stroke(); }
+}
+
+function shuttleColor(t) {
+  if (mode !== "pattern" || !tpl) return color;
+  const p = screenToLoom(t.x, t.y), c = clamp(colAt(p.x), 0, COLS - 1);
+  return tpl[Math.min(row, ROWS - 1) * COLS + c];
+}
+
+// ---------------------------------------------------------------------------
+// Yerleşim ve döngü
+// ---------------------------------------------------------------------------
+function layout() {
+  overlay.width = innerWidth * devicePixelRatio; overlay.height = innerHeight * devicePixelRatio;
+  octx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+  const narrow = innerWidth <= 1000;
+  const bar = document.getElementById("bar"), tools = document.getElementById("tools"), hud = document.querySelector(".hud");
+  tools.style.bottom = narrow ? bar.offsetHeight + 24 + "px" : "";
+  let w, h, left, top;
+  if (narrow) {
+    top = hud.getBoundingClientRect().bottom + 14;
+    const bottomReserve = bar.offsetHeight + tools.offsetHeight + 44;
+    const availW = innerWidth - 24, availH = innerHeight - top - bottomReserve;
+    const s = Math.max(0.15, Math.min(availW / LW, availH / LH));
+    w = LW * s; h = LH * s; left = (innerWidth - w) / 2; top += Math.max(0, (availH - h) / 2);
+  } else {
+    // Tezgâh: soldaki HUD ile sağdaki araç paneli arasında, paletin üstünde
+    const leftRes = hud.getBoundingClientRect().right + 16, rightRes = tools.offsetWidth + 32;
+    const availW = innerWidth - leftRes - rightRes, availH = innerHeight - 16 - bar.offsetHeight - 36;
+    const s = Math.max(0.15, Math.min(availW / LW, availH / LH));
+    w = LW * s; h = LH * s; left = leftRes + Math.max(0, (availW - w) / 2); top = 12 + Math.max(0, (availH - h) / 2);
+  }
+  loom.style.width = w + "px"; loom.style.height = h + "px";
+  loom.style.left = left + "px"; loom.style.top = top + "px";
+}
+addEventListener("resize", layout);
+
+buildLoom();
+renderWovenAll();
+setMode("free");
+selectColor(PALETTE[0][1], PALETTE[0][0]);
+setStatus("Renk seç, parlayan sıranın üzerinden mekiği geçir.");
+layout();
+
+const lastPos = {};
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min((now - last) / 1000, 0.1); last = now;
+  readHands();
+  const list = handleInput();
+  if (beatAnim) {
+    beatAnim.t += dt / 0.45;
+    if (!beatAnim.hit && beatAnim.t >= 0.55) beatAnim.hit = true;
+    if (beatAnim.t >= 1) { beatAnim = null; row++; afterBeat(); }
+  }
+  draw(now);
+  octx.clearRect(0, 0, innerWidth, innerHeight);
+  const ds = loom.getBoundingClientRect().width / LW;
+  // mekikten çıkan atkı ipi
+  if (stroke.active && !stroke.done && stroke.anchorC !== null && row < ROWS && owner) {
+    const o = list.find((t) => t.id === owner);
+    if (o) {
+      const a = loomToScreen(warpX(stroke.anchorC), rowCenter() - LOOSE);
+      octx.strokeStyle = shuttleColor(o); octx.lineWidth = Math.max(2, 5 * ds); octx.lineCap = "round";
+      octx.beginPath(); octx.moveTo(a.x, a.y); octx.quadraticCurveTo((a.x + o.x) / 2, Math.max(a.y, o.y) + 18, o.x, o.y); octx.stroke();
+    }
+  }
+  for (const t of list) {
+    if (t.id === "mouse" && !t.show) continue;
+    if (t.id === "mouse" && !screenToLoom(t.x, t.y).inside && !mouse.down) continue;
+    const lp = lastPos[t.id] || { x: t.x, tilt: 0 };
+    const tilt = lp.tilt * 0.8 + clamp((t.x - lp.x) * 0.01, -0.3, 0.3) * 0.2;
+    lastPos[t.id] = { x: t.x, tilt };
+    if (finishOpen) {
+      octx.fillStyle = t.active ? "rgba(255,214,120,.9)" : "rgba(255,255,255,.75)";
+      octx.beginPath(); octx.arc(t.x, t.y, 9, 0, Math.PI * 2); octx.fill();
+      continue;
+    }
+    drawShuttle(t.x, t.y, t.active, shuttleColor(t), tilt, ds);
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// ---------------------------------------------------------------------------
+// Test kancaları
+// ---------------------------------------------------------------------------
+window.__kilim = {
+  get state() { return { mode, pattern: patternKey, row, rows: ROWS, cols: COLS, color, beating: !!beatAnim, finished: finishOpen, progress: progress() }; },
+  get cells() { return cells; },
+  patterns: Object.keys(DESIGNS),
+  palette: PALETTE,
+  geometry: { LW, LH, COLS, ROWS, CW, CH, KX0, KX1, KY_TOP, KY_BOTTOM },
+  setMode, setPattern, selectColor,
+  template: (k = patternKey) => getTemplate(k),
+  /** Şu anki sırada c0..c1 çözgülerine atkı geçir (col yoksa mod rengi). */
+  weaveSegment: (c0, c1, col) => weaveSegment(c0, c1, col ?? null),
+  weaveRow: (col) => weaveSegment(0, COLS - 1, col ?? null),
+  /** Varsayılan anında sıkıştırır; {instant:false} animasyonlu. */
+  beat: (o = { instant: true }) => beat(o),
+  /** n sırayı tamamen dokuyup kirkitler (anında). */
+  weaveRows(n, col) { let k = 0; while (k < n && row < ROWS) { weaveSegment(0, COLS - 1, col ?? null); if (!beat({ instant: true })) break; k++; } return k; },
+  undo, clear: clearAll, finish, closeFinish, download: downloadPNG, renderFinished,
+  strokeStart, strokeMove, strokeEnd,
+  cellCenter: (r, c) => ({ x: warpX(c), y: rowTop(r) + CH / 2 }),
+  progress, draw, renderWovenAll, layout,
+};
+</script>
+</body>
+</html>

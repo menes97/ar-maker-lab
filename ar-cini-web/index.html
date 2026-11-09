@@ -1,0 +1,1041 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AR Çini Atölyesi</title>
+<style>
+  :root { --panel: rgba(14, 20, 34, 0.78); --line: rgba(255,255,255,.13); --text: #f3f1ec; --muted: #b3b8c0; --accent: #1f4e9c; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: radial-gradient(ellipse at 50% 30%, #22324a, #0b111c); color: var(--text); font: 14px/1.4 system-ui, "Segoe UI", sans-serif; }
+  #video { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); opacity: 0; transition: opacity .4s; }
+  #video.on { opacity: 1; }
+  #tile { position: fixed; border-radius: 4px; box-shadow: 0 0 0 3px #d9cfba, 0 0 0 5px #6b5a43, 0 18px 50px rgba(0,0,0,.55); touch-action: none; cursor: none; background: #f6f0e2; }
+  #overlay { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .hud { position: fixed; left: 16px; top: 16px; width: min(330px, calc(100vw - 32px)); padding: 10px 13px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; backdrop-filter: blur(8px); }
+  .hud h1 { margin: 0 0 4px; font-size: 16px; }
+  .hud p { margin: 3px 0 0; color: var(--muted); font-size: 12.5px; }
+  #status { color: var(--text); }
+  .tools { position: fixed; right: 16px; top: 16px; display: flex; flex-direction: column; gap: 6px; padding: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; backdrop-filter: blur(8px); }
+  .tools button, .bar button { border: 1px solid var(--line); background: rgba(255,255,255,.06); color: var(--text); padding: 8px 11px; border-radius: 10px; font: inherit; cursor: pointer; text-align: left; white-space: nowrap; }
+  .tools button.on { background: var(--accent); border-color: transparent; font-weight: 600; }
+  .tools button small { display: block; color: var(--muted); font-size: 11px; }
+  .tools button.on small { color: #e3ecfa; }
+  #opts { left: 16px; right: auto; width: min(330px, calc(100vw - 32px)); overflow-y: auto; }
+  #opts .grp { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+  #opts .grp + .grp { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); }
+  #opts .ttl { grid-column: 1 / -1; color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; }
+  #opts button { padding: 6px 9px; font-size: 13px; overflow: hidden; text-overflow: ellipsis; }
+  #opts button.wide { grid-column: 1 / -1; }
+  .bar { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; padding: 8px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; backdrop-filter: blur(8px); max-width: calc(100vw - 32px); }
+  .bar button.fire { background: linear-gradient(135deg, #c23a2b, #e0773a); border-color: transparent; font-weight: 600; }
+  .swatch { width: 30px; height: 30px; border-radius: 50%; border: 2px solid rgba(255,255,255,.25); cursor: pointer; padding: 0; }
+  .swatch.on { border-color: #fff; box-shadow: 0 0 0 3px rgba(255,255,255,.35); transform: scale(1.1); }
+  .sep { width: 1px; height: 26px; background: var(--line); }
+  input[type=color] { width: 34px; height: 30px; border: none; background: none; padding: 0; cursor: pointer; }
+  label.size { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
+  @media (max-width: 1000px) {
+    .hud p.long { display: none; }
+    .tools { top: auto; bottom: 120px; flex-direction: row; flex-wrap: wrap; justify-content: center; right: 50%; transform: translateX(50%); max-width: calc(100vw - 32px); }
+    .tools button small { display: none; }
+    #opts { left: 50%; right: auto; transform: translateX(-50%); width: max-content; max-width: calc(100vw - 32px); }
+    #opts .grp { display: flex; flex-wrap: wrap; justify-content: center; }
+    #opts .grp + .grp { margin-top: 0; padding-top: 0; border-top: none; }
+    #opts .ttl { display: none; }
+    #opts button { padding: 5px 8px; font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+<video id="video" playsinline muted></video>
+<canvas id="tile"></canvas>
+<canvas id="overlay"></canvas>
+
+<div class="hud">
+  <h1><a href="../" data-home-link title="Tüm atölyeler" style="color:inherit;text-decoration:none;opacity:.7;margin-right:6px;font-weight:400">←</a>🔷 AR Çini Atölyesi</h1>
+  <p id="status">Bir alet ve renk seç, karoya dokun.</p>
+  <p class="long">🤏 Başparmak + işaret parmağını birleştir (pinch) = fırça karoya değer. Pinch ile düğmelere de basabilirsin. 🖱️ Fare: basılı tut. Kısayol: 1–5 alet, S simetri, P pano, G kılavuz, Ctrl+Z geri al.</p>
+</div>
+
+<div class="tools" id="opts">
+  <div class="grp">
+    <span class="ttl">Karo</span>
+    <button id="btnSym">✳️ Simetri: 8'li</button>
+    <button id="btnGuides">📐 Kılavuz: açık</button>
+    <button id="btnPano">🧱 Pano: kapalı</button>
+    <button id="btnPanoMirror">🪞 Ayna tekrar: kapalı</button>
+    <button id="btnErase" class="wide">🧹 Silgi katmanı: boya</button>
+  </div>
+  <div class="grp" id="motifs">
+    <span class="ttl">Damga motifi</span>
+    <button data-motif="lale">🌷 Lale</button>
+    <button data-motif="karanfil">🌺 Karanfil</button>
+    <button data-motif="rumi">🍃 Rumi</button>
+    <button data-motif="hatayi">🏵️ Hatayi</button>
+    <button data-motif="bulut">☁️ Çin bulutu</button>
+  </div>
+  <div class="grp">
+    <span class="ttl">Hazır şablon (boyama modu)</span>
+    <button data-tpl="rozet">🌸 Rozet + köşebent</button>
+    <button data-tpl="vazo">🏺 Lale vazo</button>
+    <button data-tpl="yildiz" class="wide">⭐ Sekiz köşeli yıldız</button>
+  </div>
+</div>
+
+<div class="tools" id="tools">
+  <button data-tool="tahrir" class="on">🖋️ Tahrir <small>ince kontur çizer</small></button>
+  <button data-tool="brush">🖌️ Fırça <small>yumuşak boya</small></button>
+  <button data-tool="stamp">🌷 Motif damgası <small>bas, sürükle = döndür</small></button>
+  <button data-tool="fill">🪣 Doldur <small>konturlu alanı boyar</small></button>
+  <button data-tool="eraser">🧽 Silgi <small>siler</small></button>
+</div>
+
+<div class="bar" id="bar">
+  <div id="palette" style="display:flex; gap:6px; flex-wrap:wrap"></div>
+  <input type="color" id="custom" value="#d9a521" title="Özel renk" />
+  <span class="sep"></span>
+  <label class="size">Boyut <input type="range" id="size" min="0.4" max="2.5" step="0.1" value="1" /></label>
+  <span class="sep"></span>
+  <button id="btnUndo">↶ Geri al</button>
+  <button id="btnClear">🗑️ Temizle</button>
+  <button id="btnFire" class="fire">🔥 Sırla &amp; fırınla</button>
+  <button id="btnPanoPng">🧱 Pano PNG</button>
+  <button id="btnCam">📷 Kamera</button>
+</div>
+
+<script type="module">
+// ---------------------------------------------------------------------------
+// Karo: 800×800. İki katman: boya (altta) + tahrir/kontur (üstte).
+// Doldurma ve fırça yalnızca boya katmanına yazar; konturlar bozulmaz.
+// ---------------------------------------------------------------------------
+const TILE = 800, C = TILE / 2;
+const mk = (w, h = w) => { const c = document.createElement("canvas"); c.width = w; c.height = h; return c; };
+const view = document.getElementById("tile");
+const vctx = view.getContext("2d");
+view.width = view.height = TILE;
+const overlay = document.getElementById("overlay");
+const octx = overlay.getContext("2d");
+const video = document.getElementById("video");
+const statusEl = document.getElementById("status");
+const setStatus = (t) => (statusEl.textContent = t);
+
+const paint = mk(TILE), pctx = paint.getContext("2d");
+const contour = mk(TILE), cctx = contour.getContext("2d");
+const comp = mk(TILE), compCtx = comp.getContext("2d");
+let undo = [];
+let dirty = true;
+let fired = null, showFired = false;
+
+// Basit tohumlu rastgele sayı (sır çatlakları ve zemin dokusu hep aynı çıksın)
+function rng(seed) { return () => { seed |= 0; seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const hexToRgb = (h) => { const n = parseInt(h.replace("#", ""), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+const rgba = (h, a) => { const [r, g, b] = hexToRgb(h); return `rgba(${r},${g},${b},${a})`; };
+
+// Sırlı krem zemin
+const ground = mk(TILE);
+{
+  const g = ground.getContext("2d");
+  g.fillStyle = "#f6f0e2"; g.fillRect(0, 0, TILE, TILE);
+  const img = g.getImageData(0, 0, TILE, TILE), px = img.data, r = rng(7);
+  for (let i = 0; i < px.length; i += 4) { const n = (r() - 0.5) * 7; px[i] += n; px[i + 1] += n; px[i + 2] += n * 1.2; }
+  g.putImageData(img, 0, 0);
+  const v = g.createRadialGradient(C, C, TILE * 0.3, C, C, TILE * 0.75);
+  v.addColorStop(0, "rgba(255,250,240,0)"); v.addColorStop(1, "rgba(170,140,95,0.10)");
+  g.fillStyle = v; g.fillRect(0, 0, TILE, TILE);
+}
+
+// ---------------------------------------------------------------------------
+// Simetri: her vuruş merkez etrafında dönme / ayna kopyalarıyla çoğaltılır
+// ---------------------------------------------------------------------------
+const SYM_MODES = ["off", "r4", "r6", "r8", "mirror", "kaleido"];
+const SYM_NAMES = { off: "kapalı", r4: "4'lü", r6: "6'lı", r8: "8'li", mirror: "ayna ↔", kaleido: "kaleydoskop" };
+let sym = "r8";
+let guides = true;
+function symMatrices(mode = sym) {
+  const rot = (t) => [Math.cos(t), Math.sin(t), -Math.sin(t), Math.cos(t)];
+  const ref = (p) => [Math.cos(2 * p), Math.sin(2 * p), Math.sin(2 * p), -Math.cos(2 * p)];
+  if (mode === "off") return [[1, 0, 0, 1]];
+  if (mode === "mirror") return [[1, 0, 0, 1], [-1, 0, 0, 1]];
+  if (mode === "kaleido") { const out = []; for (let i = 0; i < 4; i++) out.push(rot((i * Math.PI) / 2), ref((i * Math.PI) / 4)); return out; }
+  const n = Number(mode.slice(1)), out = [];
+  for (let i = 0; i < n; i++) out.push(rot((i * 2 * Math.PI) / n));
+  return out;
+}
+const setM = (g, M) => g.setTransform(M[0], M[1], M[2], M[3], C - M[0] * C - M[2] * C, C - M[1] * C - M[3] * C);
+function eachSym(g, fn, mats = symMatrices()) { for (const M of mats) { setM(g, M); fn(); } g.setTransform(1, 0, 0, 1, 0, 0); }
+const mapPt = (M, x, y) => [M[0] * (x - C) + M[2] * (y - C) + C, M[1] * (x - C) + M[3] * (y - C) + C];
+
+function drawGuides(g) {
+  g.save();
+  g.strokeStyle = "rgba(30,80,160,.25)"; g.lineWidth = 1.5; g.setLineDash([8, 10]);
+  const R = TILE * 0.72;
+  const line = (a, both) => { g.beginPath(); g.moveTo(C - (both ? Math.sin(a) * R : 0), C + (both ? Math.cos(a) * R : 0)); g.lineTo(C + Math.sin(a) * R, C - Math.cos(a) * R); g.stroke(); };
+  if (sym[0] === "r") { const n = Number(sym.slice(1)); for (let i = 0; i < n; i++) line(((i + 0.5) * 2 * Math.PI) / n, false); }
+  else if (sym === "mirror") line(0, true);
+  else if (sym === "kaleido") for (let i = 0; i < 4; i++) line((i * Math.PI) / 4, true);
+  if (sym !== "off") { g.beginPath(); g.arc(C, C, 6, 0, Math.PI * 2); g.stroke(); }
+  g.restore();
+}
+
+// ---------------------------------------------------------------------------
+// Yordamsal vektör motifler (100 birimlik kutu, merkez 0,0, uç yukarı)
+// ---------------------------------------------------------------------------
+function cubic(start, segs, { mirror = false, close = true, rot = 0, sc = 1 } = {}) {
+  const m = mirror ? -1 : 1, cs = Math.cos(rot), sn = Math.sin(rot);
+  const T = (x, y) => { x *= m * sc; y *= sc; return [x * cs - y * sn, x * sn + y * cs]; };
+  const p = new Path2D();
+  p.moveTo(...T(start[0], start[1]));
+  for (const s of segs) p.bezierCurveTo(...T(s[0], s[1]), ...T(s[2], s[3]), ...T(s[4], s[5]));
+  if (close) p.closePath();
+  return p;
+}
+function circle(x, y, r) { const p = new Path2D(); p.arc(x, y, r, 0, Math.PI * 2); return p; }
+
+function buildLale() {
+  const body = cubic([0, 8], [[-18, 6, -22, -14, -16, -30], [-12, -22, -8, -20, -6, -22], [-8, -36, -4, -46, 0, -52], [4, -46, 8, -36, 6, -22], [8, -20, 12, -22, 16, -30], [22, -14, 18, 6, 0, 8]]);
+  const leaf = (mirror) => cubic([0, 42], [[-20, 32, -30, 12, -28, -4], [-18, 8, -8, 22, 0, 34]], { mirror });
+  const stem = cubic([0, 8], [[-2, 24, 2, 36, 0, 50]], { close: false });
+  const pl = (mirror) => cubic([-6, -22], [[-6, -12, -3, -3, -1, 5]], { mirror, close: false });
+  return { fills: [leaf(false), leaf(true), body], lines: [stem, pl(false), pl(true)] };
+}
+function buildKaranfil() {
+  const c = [0, -6], R = 40, N = 7, a0 = -Math.PI + 0.25, a1 = -0.25, da = (a1 - a0) / N;
+  const P = (a, r) => [c[0] + Math.cos(a) * r, c[1] + Math.sin(a) * r];
+  const fan = new Path2D();
+  fan.moveTo(-9, -2); fan.lineTo(...P(a0, R));
+  for (let i = 0; i < N; i++) {
+    const a = a0 + i * da;
+    fan.quadraticCurveTo(...P(a + da * 0.25, R + 11), ...P(a + da * 0.5, R + 2));
+    fan.quadraticCurveTo(...P(a + da * 0.75, R + 11), ...P(a + da, R));
+  }
+  fan.lineTo(9, -2); fan.quadraticCurveTo(0, 2, -9, -2); fan.closePath();
+  const calyx = cubic([-9, -2], [[-12, 10, -6, 18, 0, 22], [6, 18, 12, 10, 9, -2]]);
+  const leaf = (mirror) => cubic([0, 40], [[10, 34, 22, 34, 32, 26], [24, 40, 12, 44, 0, 44]], { mirror });
+  const lines = new Path2D();
+  for (let i = 1; i < N; i++) { const a = a0 + i * da; lines.moveTo(...P(a, R * 0.42)); lines.lineTo(...P(a, R - 1)); }
+  lines.moveTo(...P(a0 + 0.05, R * 0.42)); lines.arc(c[0], c[1], R * 0.42, a0 + 0.05, a1 - 0.05);
+  const stem = cubic([0, 22], [[2, 32, -2, 42, 0, 52]], { close: false });
+  return { fills: [leaf(false), leaf(true), fan, calyx], lines: [lines, stem] };
+}
+function buildRumi() {
+  const wing = (mirror) => cubic([2, -50], [[20, -40, 40, -20, 38, 5], [36, 25, 20, 38, 2, 45], [12, 32, 18, 22, 18, 12], [12, 16, 6, 18, 3, 18], [10, 10, 16, 0, 16, -10], [10, -6, 6, -4, 3, -4], [8, -16, 8, -34, 2, -50]], { mirror });
+  const drop = cubic([0, -26], [[3, -16, 3, -6, 0, 4], [-3, -6, -3, -16, 0, -26]]);
+  return { fills: [wing(false), wing(true), drop], lines: [] };
+}
+const BIG_PETAL = [[0, -60], [[28, -72, 40, -112, 0, -146], [-40, -112, -28, -72, 0, -60]]];
+const BIG_PETAL_IN = [[0, -78], [[14, -88, 18, -110, 0, -132], [-18, -110, -14, -88, 0, -78]]];
+function buildHatayi() {
+  const fills = [];
+  for (let k = 0; k < 8; k++) fills.push(cubic([0, -10], [[12, -14, 18, -32, 7, -46], [3, -44, 1, -41, 0, -40], [-1, -41, -3, -44, -7, -46], [-18, -32, -12, -14, 0, -10]], { rot: (k * Math.PI) / 4 }));
+  for (let k = 0; k < 8; k++) fills.push(cubic([0, -8], [[6, -12, 8, -22, 0, -30], [-8, -22, -6, -12, 0, -8]], { rot: (k * Math.PI) / 4 + Math.PI / 8 }));
+  fills.push(circle(0, 0, 9));
+  return { fills, lines: [circle(0, 0, 4)] };
+}
+function buildBulut() {
+  // "Kaplumbağa" yöntemi: ortadan başlayıp eğriliği artarak kıvrılan S-kuşak
+  const half = []; let x = 0, y = 0, th = -0.35; const L = 70, n = 90, ds = L / n;
+  for (let i = 0; i <= n; i++) { const u = i / n; half.push([x, y, u]); th += (0.012 + 0.32 * u ** 2.5) * ds; x += Math.cos(th) * ds; y += Math.sin(th) * ds; }
+  const pts = [...half.slice(1).reverse().map(([x, y, u]) => [-x, -y, u]), ...half];
+  let mx = 0; for (const [x, y] of pts) mx = Math.max(mx, Math.abs(x) + 10, Math.abs(y) + 10);
+  const s = 46 / mx, left = [], right = [];
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
+    let tx = b[0] - a[0], ty = b[1] - a[1]; const l = Math.hypot(tx, ty) || 1; tx /= l; ty /= l;
+    const w = 1.5 + 8.5 * (1 - pts[i][2]) ** 0.9;
+    left.push([(pts[i][0] - ty * w) * s, (pts[i][1] + tx * w) * s]);
+    right.push([(pts[i][0] + ty * w) * s, (pts[i][1] - tx * w) * s]);
+  }
+  const band = new Path2D();
+  band.moveTo(...left[0]); for (const p of left) band.lineTo(...p);
+  for (let i = right.length - 1; i >= 0; i--) band.lineTo(...right[i]);
+  band.closePath();
+  const mid = new Path2D(); let started = false;
+  for (const [x, y, u] of pts) { if (u > 0.8) { started = false; continue; } if (!started) { mid.moveTo(x * s, y * s); started = true; } else mid.lineTo(x * s, y * s); }
+  return { fills: [band], lines: [mid] };
+}
+function buildSaz() {
+  return { fills: [cubic([0, 50], [[-18, 20, -16, -22, 0, -50], [10, -20, 14, 22, 0, 50]])], lines: [cubic([0, 44], [[-3, 10, -3, -20, 0, -40]], { close: false })] };
+}
+const MOTIFS = { lale: buildLale(), karanfil: buildKaranfil(), rumi: buildRumi(), hatayi: buildHatayi(), bulut: buildBulut(), saz: buildSaz() };
+const MOTIF_NAMES = { lale: "Lale", karanfil: "Karanfil", rumi: "Rumi", hatayi: "Hatayi", bulut: "Çin bulutu", saz: "Saz yaprağı" };
+
+function paintMotif(g, key, x, y, size, angle, { fill = null, line = null, lw = 2.4 } = {}) {
+  const m = MOTIFS[key], s = size / 100;
+  g.save(); g.translate(x, y); g.rotate(angle); g.scale(s, s);
+  if (fill) { g.fillStyle = fill; for (const p of m.fills) g.fill(p); }
+  if (line) {
+    g.strokeStyle = line; g.lineWidth = lw / s; g.lineJoin = "round"; g.lineCap = "round";
+    for (const p of m.fills) g.stroke(p);
+    for (const p of m.lines) g.stroke(p);
+  }
+  g.restore();
+}
+
+// ---------------------------------------------------------------------------
+// Hazır şablonlar (yalnızca kontur katmanına; "boyama modu")
+// ---------------------------------------------------------------------------
+const TPL_INK = "#1c1f26";
+function tplFrame(g) { g.strokeRect(14, 14, TILE - 28, TILE - 28); g.strokeRect(26, 26, TILE - 52, TILE - 52); }
+function petalPath(spec, rot, sc, ox = 0, oy = 0) { const p = cubic(spec[0], spec[1], { rot, sc }); const q = new Path2D(); q.addPath(p, new DOMMatrix([1, 0, 0, 1, ox, oy])); return q; }
+function scallops(g, cx, cy, r, angles, br) {
+  for (const a of angles) { const px = cx + Math.sin(a) * r, py = cy - Math.cos(a) * r, out = a - Math.PI / 2; g.beginPath(); g.arc(px, py, br, out - Math.PI / 2, out + Math.PI / 2); g.stroke(); }
+}
+const outline = (g, key, x, y, size, angle) => paintMotif(g, key, x, y, size, angle, { line: TPL_INK, lw: 3 });
+
+const TEMPLATES = {
+  rozet: {
+    name: "Rozet + köşebent", sym: "kaleido",
+    draw(g) {
+      tplFrame(g);
+      // Köşe çeyrek madalyonları, kenar laleleri, çapraz rumiler (4 kez döndürülür)
+      eachSym(g, () => {
+        g.save(); g.beginPath(); g.rect(26, 26, TILE - 52, TILE - 52); g.clip();
+        g.beginPath(); g.arc(26, 26, 150, 0, Math.PI * 2); g.stroke();
+        g.beginPath(); g.arc(26, 26, 120, 0, Math.PI * 2); g.stroke();
+        g.beginPath(); g.arc(26, 26, 30, 0, Math.PI * 2); g.stroke();
+        g.restore();
+        scallops(g, 26, 26, 150, [1, 2, 3, 4, 5].map((i) => Math.PI / 2 + (i * Math.PI) / 12), 10);
+        g.stroke(petalPath(BIG_PETAL, (3 * Math.PI) / 4, 0.75, 26, 26));
+        g.stroke(petalPath(BIG_PETAL_IN, (3 * Math.PI) / 4, 0.75, 26, 26));
+        outline(g, "lale", C, 110, 120, 0);
+        outline(g, "rumi", 200.6, 200.6, 110, -Math.PI / 4);
+      }, symMatrices("r4"));
+      // Orta rozet
+      g.beginPath(); g.arc(C, C, 18, 0, Math.PI * 2); g.stroke();
+      g.beginPath(); g.arc(C, C, 56, 0, Math.PI * 2); g.stroke();
+      g.beginPath(); g.arc(C, C, 150, 0, Math.PI * 2); g.stroke();
+      g.beginPath(); g.arc(C, C, 172, 0, Math.PI * 2); g.stroke();
+      for (let k = 0; k < 8; k++) {
+        const r = (k * Math.PI) / 4;
+        g.stroke(petalPath([[0, -18], [[12, -24, 14, -40, 0, -50], [-14, -40, -12, -24, 0, -18]]], r, 1, C, C));
+        g.stroke(petalPath(BIG_PETAL, r, 1, C, C));
+        g.stroke(petalPath(BIG_PETAL_IN, r, 1, C, C));
+      }
+      scallops(g, C, C, 172, Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8), 14);
+    },
+  },
+  vazo: {
+    name: "Lale vazo", sym: "mirror",
+    draw(g) {
+      tplFrame(g);
+      g.stroke(new Path2D("M330 740 L470 740 C 470 720, 440 712, 440 700 C 500 670, 510 600, 460 560 C 448 550, 440 540, 445 520 L 455 505 L 345 505 L 355 520 C 360 540, 352 550, 340 560 C 290 600, 300 670, 360 700 C 360 712, 330 720, 330 740 Z"));
+      g.stroke(new Path2D("M355 520 L445 520 M360 700 L440 700"));
+      g.beginPath(); g.arc(C, 630, 30, 0, Math.PI * 2); g.stroke();
+      g.beginPath(); g.arc(C, 630, 12, 0, Math.PI * 2); g.stroke();
+      g.stroke(new Path2D("M400 505 C 395 420, 405 330, 400 265"));
+      outline(g, "lale", C, 200, 130, 0);
+      outline(g, "rumi", C, 80, 80, 0);
+      const both = (fn) => { fn(); g.save(); g.setTransform(-1, 0, 0, 1, TILE, 0); fn(); g.restore(); };
+      both(() => {
+        g.stroke(new Path2D("M392 505 C 340 455, 290 410, 270 354"));
+        outline(g, "karanfil", 250, 300, 110, -0.35);
+        g.stroke(new Path2D("M372 512 C 320 520, 240 510, 192 467"));
+        outline(g, "lale", 150, 440, 100, -1.0);
+        outline(g, "saz", 352, 400, 90, -0.6);
+        outline(g, "rumi", 110, 110, 100, -Math.PI / 4);
+        outline(g, "hatayi", 120, 640, 90, 0);
+      });
+    },
+  },
+  yildiz: {
+    name: "Sekiz köşeli yıldız", sym: "kaleido",
+    draw(g) {
+      tplFrame(g);
+      g.strokeRect(C - 177, C - 177, 354, 354);
+      g.stroke(new Path2D(`M${C} 150 L650 ${C} L${C} 650 L150 ${C} Z`));
+      g.beginPath(); g.arc(C, C, 120, 0, Math.PI * 2); g.stroke();
+      g.beginPath(); g.arc(C, C, 24, 0, Math.PI * 2); g.stroke();
+      for (let k = 0; k < 8; k++) g.stroke(petalPath(BIG_PETAL, (k * Math.PI) / 4, 0.55, C, C));
+      eachSym(g, () => {
+        g.save(); g.beginPath(); g.rect(26, 26, TILE - 52, TILE - 52); g.clip();
+        g.beginPath(); g.arc(26, 26, 110, 0, Math.PI * 2); g.stroke();
+        g.beginPath(); g.arc(26, 26, 80, 0, Math.PI * 2); g.stroke();
+        g.restore();
+        outline(g, "lale", C, 88, 85, 0);
+      }, symMatrices("r4"));
+    },
+  },
+};
+
+function applyTemplate(name) {
+  const t = TEMPLATES[name];
+  if (!t) return;
+  snapshot(); showFired = false;
+  pctx.clearRect(0, 0, TILE, TILE); cctx.clearRect(0, 0, TILE, TILE);
+  cctx.save();
+  cctx.strokeStyle = TPL_INK; cctx.lineWidth = 3; cctx.lineJoin = "round"; cctx.lineCap = "round";
+  t.draw(cctx);
+  cctx.restore(); cctx.setTransform(1, 0, 0, 1, 0, 0);
+  setSymmetry(t.sym, true);
+  selectTool("fill");
+  dirty = true;
+  setStatus(`Şablon: ${t.name}. Boyama modu: 🪣 Doldur ile alanlara dokun (simetri: ${SYM_NAMES[t.sym]}).`);
+}
+
+// ---------------------------------------------------------------------------
+// Aletler ve renkler
+// ---------------------------------------------------------------------------
+const PALETTE = [
+  ["Kobalt mavisi", "#1f4e9c"], ["Turkuaz", "#2fa3a6"], ["Mercan kırmızısı", "#c23a2b"], ["Zümrüt yeşili", "#1f8a5b"],
+  ["Mor (manganez)", "#6b4a7a"], ["Siyah tahrir", "#1c1f26"], ["Beyaz", "#fbf8f1"],
+];
+let color = PALETTE[0][1];   // boya rengi (fırça, damga dolgusu, doldur)
+let ink = PALETTE[5][1];     // tahrir rengi (kontur)
+let tool = "tahrir";
+let motif = "lale";
+let stampAngle = 0;
+let eraseMode = "paint";     // paint | contour | both
+let fillTol = 60;
+let pano = false, panoMirror = false;
+const sizeEl = document.getElementById("size");
+const sizeK = () => Number(sizeEl.value);
+const penBase = () => 3.2 * sizeK();
+const brushR = () => 26 * sizeK();
+const stampSize = () => 110 * sizeK();
+
+const palEl = document.getElementById("palette");
+PALETTE.forEach(([name, c]) => {
+  const b = document.createElement("button");
+  b.className = "swatch"; b.style.background = c; b.title = name; b.dataset.color = c; b.dataset.name = name;
+  b.onclick = () => selectColor(c, name);
+  palEl.appendChild(b);
+});
+document.getElementById("custom").oninput = (e) => selectColor(e.target.value, "Özel renk");
+function refreshSwatches() {
+  const active = tool === "tahrir" ? ink : color;
+  palEl.querySelectorAll(".swatch").forEach((s) => s.classList.toggle("on", s.dataset.color === active));
+}
+function selectColor(c, name = c, target = tool === "tahrir" ? "ink" : "paint") {
+  if (target === "ink") ink = c; else color = c;
+  refreshSwatches();
+  setStatus(`${target === "ink" ? "Tahrir rengi" : "Boya"}: ${name}`);
+}
+
+const TOOL_NAMES = { tahrir: "Tahrir", brush: "Fırça", stamp: "Motif damgası", fill: "Doldur", eraser: "Silgi" };
+const TOOL_HINTS = {
+  tahrir: "Ince kontur çiz; yavaş = kalın, hızlı = ince. Renk seçimi tahrir rengini değiştirir.",
+  brush: "Yumuşak kenarlı boya; konturların altına sürülür.",
+  stamp: "Bas = motif; basılıyken sürükle = döndür. Boyut sürgüsü büyüklüğü belirler.",
+  fill: "Konturla çevrili alana dokun: alan seçili renkle dolar.",
+  eraser: "Sürterek sil. Hangi katmanın silineceğini 'Silgi katmanı' düğmesi seçer.",
+};
+function selectTool(t) {
+  tool = t;
+  document.querySelectorAll("#tools button").forEach((b) => b.classList.toggle("on", b.dataset.tool === t));
+  refreshSwatches();
+  setStatus(`${TOOL_NAMES[t]}: ${TOOL_HINTS[t]}`);
+}
+document.querySelectorAll("#tools button").forEach((b) => (b.onclick = () => selectTool(b.dataset.tool)));
+
+function selectMotif(m) {
+  if (!MOTIFS[m]) return;
+  motif = m;
+  document.querySelectorAll("#motifs button").forEach((b) => b.classList.toggle("on", b.dataset.motif === m));
+  selectTool("stamp");
+  setStatus(`Damga: ${MOTIF_NAMES[m]}. Bas = bırak, sürükle = döndür.`);
+}
+document.querySelectorAll("#motifs button").forEach((b) => (b.onclick = () => selectMotif(b.dataset.motif)));
+document.querySelectorAll("[data-tpl]").forEach((b) => (b.onclick = () => applyTemplate(b.dataset.tpl)));
+
+function setSymmetry(mode, quiet = false) {
+  if (!SYM_MODES.includes(mode)) return;
+  sym = mode; dirty = true;
+  document.getElementById("btnSym").textContent = `✳️ Simetri: ${SYM_NAMES[mode]}`;
+  if (!quiet) setStatus(`Simetri: ${SYM_NAMES[mode]} (${symMatrices().length} kopya).`);
+}
+function setGuides(on) { guides = !!on; dirty = true; document.getElementById("btnGuides").textContent = `📐 Kılavuz: ${guides ? "açık" : "kapalı"}`; }
+function setPano(on, mirror = panoMirror) {
+  pano = !!on; panoMirror = !!mirror; dirty = true;
+  document.getElementById("btnPano").textContent = `🧱 Pano: ${pano ? "3×3" : "kapalı"}`;
+  document.getElementById("btnPanoMirror").textContent = `🪞 Ayna tekrar: ${panoMirror ? "açık" : "kapalı"}`;
+  document.getElementById("btnPano").classList.toggle("on", pano);
+  document.getElementById("btnPanoMirror").classList.toggle("on", panoMirror);
+}
+const ERASE_NAMES = { paint: "boya", contour: "tahrir", both: "hepsi" };
+function setEraseMode(m) { if (!ERASE_NAMES[m]) return; eraseMode = m; document.getElementById("btnErase").textContent = `🧹 Silgi katmanı: ${ERASE_NAMES[m]}`; }
+document.getElementById("btnSym").onclick = () => setSymmetry(SYM_MODES[(SYM_MODES.indexOf(sym) + 1) % SYM_MODES.length]);
+document.getElementById("btnGuides").onclick = () => setGuides(!guides);
+document.getElementById("btnPano").onclick = () => { setPano(!pano); setStatus(pano ? "Pano görünümü: karo 3×3 döşendi. Herhangi bir karoya çizebilirsin." : "Tek karo görünümü."); };
+document.getElementById("btnPanoMirror").onclick = () => { setPano(pano, !panoMirror); setStatus(panoMirror ? "Ayna tekrar: komşu karolar aynalanır." : "Düz tekrar."); };
+document.getElementById("btnErase").onclick = () => { const k = Object.keys(ERASE_NAMES); setEraseMode(k[(k.indexOf(eraseMode) + 1) % k.length]); setStatus(`Silgi artık ${ERASE_NAMES[eraseMode]} katmanını siler.`); };
+
+// ---------------------------------------------------------------------------
+// Doldurma (tolerans tabanlı, kontur katmanı sınır)
+// ---------------------------------------------------------------------------
+function fillSeeds(seeds, hex, tol = fillTol) {
+  const N = TILE, [fr, fg, fb] = hexToRgb(hex);
+  const pimg = pctx.getImageData(0, 0, N, N), p = pimg.data;
+  const cdat = cctx.getImageData(0, 0, N, N).data;
+  const bar = new Uint8Array(N * N);
+  for (let i = 0, j = 3; i < bar.length; i++, j += 4) bar[i] = cdat[j] > 90 ? 1 : 0;
+  let changed = false;
+  for (const [sx0, sy0] of seeds) {
+    const sx = Math.round(sx0), sy = Math.round(sy0);
+    if (sx < 0 || sy < 0 || sx >= N || sy >= N) continue;
+    const s = sy * N + sx;
+    if (bar[s]) continue;
+    const s4 = s * 4, sa = p[s4 + 3];
+    if (sa > 200 && Math.abs(p[s4] - fr) + Math.abs(p[s4 + 1] - fg) + Math.abs(p[s4 + 2] - fb) < 8) continue;
+    const sr = (p[s4] * sa) / 255, sg = (p[s4 + 1] * sa) / 255, sb = (p[s4 + 2] * sa) / 255;
+    const mask = new Uint8Array(N * N);
+    const match = (i) => {
+      if (bar[i] || mask[i]) return false;
+      const i4 = i * 4, a = p[i4 + 3];
+      return Math.abs((p[i4] * a) / 255 - sr) + Math.abs((p[i4 + 1] * a) / 255 - sg) + Math.abs((p[i4 + 2] * a) / 255 - sb) + Math.abs(a - sa) <= tol;
+    };
+    const stack = [s];
+    while (stack.length) {
+      const i = stack.pop();
+      if (!match(i)) continue;
+      const y = (i / N) | 0, row = y * N;
+      let l = i - row, r = l;
+      while (l > 0 && match(row + l - 1)) l--;
+      while (r < N - 1 && match(row + r + 1)) r++;
+      for (let x = l; x <= r; x++) mask[row + x] = 1;
+      for (const ny of [y - 1, y + 1]) {
+        if (ny < 0 || ny >= N) continue;
+        const nrow = ny * N; let inSpan = false;
+        for (let x = l; x <= r; x++) {
+          const m = match(nrow + x);
+          if (m && !inSpan) { stack.push(nrow + x); inSpan = true; } else if (!m) inSpan = false;
+        }
+      }
+    }
+    // Boya kontur çizgisinin altına 2 px taşsın: beyaz hale kalmasın
+    for (let pass = 0; pass < 2; pass++) {
+      const add = [];
+      for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+        const i = y * N + x;
+        if (mask[i] || !bar[i]) continue;
+        if ((x > 0 && mask[i - 1]) || (x < N - 1 && mask[i + 1]) || (y > 0 && mask[i - N]) || (y < N - 1 && mask[i + N])) add.push(i);
+      }
+      for (const i of add) mask[i] = 1;
+    }
+    for (let i = 0; i < mask.length; i++) if (mask[i]) { const i4 = i * 4; p[i4] = fr; p[i4 + 1] = fg; p[i4 + 2] = fb; p[i4 + 3] = 255; changed = true; }
+  }
+  if (changed) { pctx.putImageData(pimg, 0, 0); dirty = true; }
+  return changed;
+}
+const fillAt = (x, y, hex = color) => fillSeeds(symMatrices().map((M) => mapPt(M, x, y)), hex);
+
+// ---------------------------------------------------------------------------
+// Vuruşlar
+// ---------------------------------------------------------------------------
+const stroke = { active: false, lastX: 0, lastY: 0, prevX: 0, prevY: 0, midX: 0, midY: 0, w: 0, acc: 0, changed: false, ax: 0, ay: 0, angle: 0, tool: "tahrir" };
+
+function snapshot() {
+  const cp = (src) => { const c = mk(TILE); c.getContext("2d").drawImage(src, 0, 0); return c; };
+  undo.push({ paint: cp(paint), contour: cp(contour) });
+  if (undo.length > 20) undo.shift();
+}
+function restore(s) {
+  pctx.clearRect(0, 0, TILE, TILE); pctx.drawImage(s.paint, 0, 0);
+  cctx.clearRect(0, 0, TILE, TILE); cctx.drawImage(s.contour, 0, 0);
+  showFired = false; dirty = true;
+}
+
+function dab(x, y) {
+  const r = brushR();
+  if ((stroke.active ? stroke.tool : tool) === "brush") {
+    const gr = pctx.createRadialGradient(x, y, 0, x, y, r);
+    gr.addColorStop(0, rgba(color, 0.42)); gr.addColorStop(0.55, rgba(color, 0.3)); gr.addColorStop(1, rgba(color, 0));
+    pctx.fillStyle = gr;
+    eachSym(pctx, () => { pctx.beginPath(); pctx.arc(x, y, r, 0, Math.PI * 2); pctx.fill(); });
+  } else {
+    for (const [g, on] of [[pctx, eraseMode !== "contour"], [cctx, eraseMode !== "paint"]]) {
+      if (!on) continue;
+      const gr = g.createRadialGradient(x, y, 0, x, y, r);
+      gr.addColorStop(0, "rgba(0,0,0,.9)"); gr.addColorStop(0.6, "rgba(0,0,0,.6)"); gr.addColorStop(1, "rgba(0,0,0,0)");
+      g.save(); g.globalCompositeOperation = "destination-out"; g.fillStyle = gr;
+      eachSym(g, () => { g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); });
+      g.restore();
+    }
+  }
+  stroke.changed = true; dirty = true;
+}
+
+function inkSeg(fn, w) {
+  cctx.strokeStyle = ink; cctx.fillStyle = ink; cctx.lineWidth = w; cctx.lineCap = "round"; cctx.lineJoin = "round";
+  eachSym(cctx, fn);
+  stroke.changed = true; dirty = true;
+}
+
+function stampAt(x, y, angle = stampAngle, o = {}) {
+  const key = o.motif || motif, size = o.size || stampSize(), fill = o.color || color, line = o.ink || ink;
+  eachSym(pctx, () => paintMotif(pctx, key, x, y, size, angle, { fill }));
+  eachSym(cctx, () => paintMotif(cctx, key, x, y, size, angle, { line, lw: 2.4 }));
+  dirty = true;
+}
+
+function strokeStart(x, y) {
+  showFired = false;
+  snapshot();
+  Object.assign(stroke, { active: true, tool, lastX: x, lastY: y, prevX: x, prevY: y, midX: x, midY: y, acc: 0, changed: false, ax: x, ay: y, angle: stampAngle });
+  if (tool === "tahrir") { stroke.w = penBase() * 0.55; const w = stroke.w; inkSeg(() => { cctx.beginPath(); cctx.arc(x, y, w / 2, 0, Math.PI * 2); cctx.fill(); }, w); }
+  else if (tool === "brush" || tool === "eraser") dab(x, y);
+  else if (tool === "fill") stroke.changed = fillAt(x, y, color);
+  dirty = true;
+}
+
+function strokeMove(x, y, dt = 1 / 60) {
+  if (!stroke.active) return;
+  const dx = x - stroke.lastX, dy = y - stroke.lastY, len = Math.hypot(dx, dy);
+  if (len > 260) { // pano görünümünde karo sınırından atlama: çizgiyi kopar
+    Object.assign(stroke, { lastX: x, lastY: y, prevX: x, prevY: y, midX: x, midY: y, acc: 0 });
+    return;
+  }
+  if (stroke.tool === "tahrir") {
+    if (len < 1.2) return;
+    const v = len / Math.max(dt, 1 / 120), base = penBase();
+    const target = base * Math.min(1.35, Math.max(0.55, 1.35 - v / 1100));
+    stroke.w += (target - stroke.w) * 0.3;
+    const nmx = (stroke.prevX + x) / 2, nmy = (stroke.prevY + y) / 2;
+    const { midX: mx, midY: my, prevX: px, prevY: py } = stroke;
+    inkSeg(() => { cctx.beginPath(); cctx.moveTo(mx, my); cctx.quadraticCurveTo(px, py, nmx, nmy); cctx.stroke(); }, stroke.w);
+    Object.assign(stroke, { midX: nmx, midY: nmy, prevX: x, prevY: y });
+  } else if (stroke.tool === "brush" || stroke.tool === "eraser") {
+    const spacing = Math.max(1.5, brushR() * 0.22);
+    let pos = spacing - stroke.acc;
+    while (pos <= len) { dab(stroke.lastX + (dx * pos) / len, stroke.lastY + (dy * pos) / len); pos += spacing; }
+    stroke.acc = len - (pos - spacing);
+  } else if (stroke.tool === "stamp") {
+    const ddx = x - stroke.ax, ddy = y - stroke.ay;
+    if (Math.hypot(ddx, ddy) > 14) { stroke.angle = Math.atan2(ddx, -ddy); dirty = true; }
+  }
+  stroke.lastX = x; stroke.lastY = y;
+}
+
+function strokeEnd() {
+  if (!stroke.active) return;
+  stroke.active = false;
+  if (stroke.tool === "tahrir" && stroke.changed) {
+    const { midX: mx, midY: my, prevX: px, prevY: py } = stroke;
+    inkSeg(() => { cctx.beginPath(); cctx.moveTo(mx, my); cctx.lineTo(px, py); cctx.stroke(); }, stroke.w * 0.7);
+  }
+  if (stroke.tool === "stamp") { stampAngle = stroke.angle; stampAt(stroke.ax, stroke.ay, stroke.angle); stroke.changed = true; }
+  if (!stroke.changed) undo.pop();
+  dirty = true;
+}
+
+function strokePath(points, t = tool) {
+  if (!points.length) return;
+  const prev = tool; tool = t;
+  strokeStart(points[0][0], points[0][1]);
+  for (let i = 1; i < points.length; i++) strokeMove(points[i][0], points[i][1], 1 / 60);
+  strokeEnd();
+  tool = prev; draw();
+}
+
+// ---------------------------------------------------------------------------
+// Sırla & fırınla
+// ---------------------------------------------------------------------------
+function tinted(src, col) { const c = mk(src.width, src.height), g = c.getContext("2d"); g.drawImage(src, 0, 0); g.globalCompositeOperation = "source-in"; g.fillStyle = col; g.fillRect(0, 0, c.width, c.height); return c; }
+function redMask() {
+  // Kabartma mercan kırmızısı (İznik'in ünlü "bolus" kırmızısı): kırmızı pikseller ayrı katman
+  const img = pctx.getImageData(0, 0, TILE, TILE), p = img.data; let n = 0;
+  for (let i = 0; i < p.length; i += 4) {
+    const red = p[i + 3] > 40 && p[i] > 130 && p[i] > p[i + 1] + 60 && p[i] > p[i + 2] + 50;
+    if (red) n++; else p[i + 3] = 0;
+  }
+  if (n < 50) return null;
+  const c = mk(TILE); c.getContext("2d").putImageData(img, 0, 0); return c;
+}
+function glaze() {
+  const N = TILE, out = mk(N), g = out.getContext("2d");
+  g.drawImage(ground, 0, 0);
+  const red = redMask();
+  if (red) { g.globalAlpha = 0.45; g.drawImage(tinted(red, "#4a0f0a"), 1.5, 1.8); g.globalAlpha = 1; }
+  // Renk akması / yumuşama
+  g.filter = "blur(1.6px)"; g.globalAlpha = 0.55; g.drawImage(paint, 0, 0);
+  g.filter = "saturate(1.12)"; g.globalAlpha = 0.85; g.drawImage(paint, 0, 0);
+  g.filter = "none"; g.globalAlpha = 1;
+  if (red) { g.globalAlpha = 0.4; g.drawImage(tinted(red, "#ffffff"), -1, -1); g.globalAlpha = 1; g.drawImage(red, 0, 0); }
+  g.filter = "blur(0.45px)"; g.drawImage(contour, 0, 0); g.filter = "none";
+  // Çok hafif sır çatlakları
+  const r = rng(1453);
+  g.lineCap = "round";
+  const crack = (x, y, a, steps, depth) => {
+    g.beginPath(); g.moveTo(x, y);
+    for (let i = 0; i < steps; i++) {
+      a += (r() - 0.5) * 0.9; const l = 6 + r() * 10; x += Math.cos(a) * l; y += Math.sin(a) * l; g.lineTo(x, y);
+      if (depth < 1 && r() < 0.12) { g.stroke(); crack(x, y, a + (r() < 0.5 ? 1 : -1) * (0.6 + r() * 0.8), 4 + ((r() * 6) | 0), depth + 1); g.beginPath(); g.moveTo(x, y); }
+    }
+    g.stroke();
+  };
+  g.strokeStyle = "rgba(70,55,40,0.09)"; g.lineWidth = 0.7;
+  for (let i = 0; i < 90; i++) crack(r() * N, r() * N, r() * Math.PI * 2, 8 + ((r() * 12) | 0), 0);
+  // Parlak sır: çapraz parıltı + yansıma lekesi
+  const lg = g.createLinearGradient(0, 0, N, N);
+  lg.addColorStop(0, "rgba(255,255,255,0.20)"); lg.addColorStop(0.35, "rgba(255,255,255,0.04)"); lg.addColorStop(0.6, "rgba(255,255,255,0)"); lg.addColorStop(1, "rgba(0,0,0,0.07)");
+  g.fillStyle = lg; g.fillRect(0, 0, N, N);
+  g.save(); g.translate(N * 0.3, N * 0.22); g.rotate(-0.6); g.scale(1, 0.35);
+  const sg = g.createRadialGradient(0, 0, 0, 0, 0, N * 0.32);
+  sg.addColorStop(0, "rgba(255,255,255,0.30)"); sg.addColorStop(1, "rgba(255,255,255,0)");
+  g.fillStyle = sg; g.fillRect(-N, -N, 2 * N, 2 * N); g.restore();
+  // Karo kenarı (pah)
+  const edge = (x0, y0, x1, y1, col, rx, ry, rw, rh) => { const e = g.createLinearGradient(x0, y0, x1, y1); e.addColorStop(0, col); e.addColorStop(1, "rgba(0,0,0,0)"); g.fillStyle = e; g.fillRect(rx, ry, rw, rh); };
+  edge(0, 0, 0, 16, "rgba(255,255,255,.28)", 0, 0, N, 16);
+  edge(0, 0, 16, 0, "rgba(255,255,255,.22)", 0, 0, 16, N);
+  edge(0, N, 0, N - 16, "rgba(60,40,20,.20)", 0, N - 16, N, 16);
+  edge(N, 0, N - 16, 0, "rgba(60,40,20,.16)", N - 16, 0, 16, N);
+  // İnce gren
+  const img = g.getImageData(0, 0, N, N), px = img.data;
+  for (let i = 0; i < px.length; i += 4) { const n = (r() - 0.5) * 6; px[i] += n; px[i + 1] += n; px[i + 2] += n; }
+  g.putImageData(img, 0, 0);
+  return out;
+}
+const timeTag = () => new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+function download(canvas, name) { const a = document.createElement("a"); a.download = `${name}-${timeTag()}.png`; a.href = canvas.toDataURL("image/png"); a.click(); }
+function fire({ download: dl = true } = {}) {
+  fired = glaze(); showFired = true; dirty = true;
+  if (dl) download(fired, "cini-karo");
+  setStatus("Karo sırlandı ve fırınlandı! 🔥 PNG indirildi. Yeni bir dokunuş sırrı kaldırır.");
+  return fired;
+}
+function panoCanvas(tileImg, t = 600, grout = true) {
+  const out = mk(t * 3), g = out.getContext("2d");
+  for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) {
+    const fx = panoMirror && i % 2 === 0, fy = panoMirror && j % 2 === 0;
+    g.save(); g.translate(i * t + (fx ? t : 0), j * t + (fy ? t : 0)); g.scale(fx ? -1 : 1, fy ? -1 : 1);
+    g.drawImage(tileImg, 0, 0, t, t); g.restore();
+  }
+  if (grout) {
+    g.strokeStyle = "rgba(120,110,95,.75)"; g.lineWidth = Math.max(2, t / 200);
+    for (let k = 1; k < 3; k++) { g.beginPath(); g.moveTo(k * t, 0); g.lineTo(k * t, 3 * t); g.moveTo(0, k * t); g.lineTo(3 * t, k * t); g.stroke(); }
+  }
+  return out;
+}
+function downloadPano({ download: dl = true } = {}) {
+  const c = panoCanvas(glaze(), 600);
+  if (dl) download(c, "cini-pano");
+  setStatus("3×3 pano PNG indirildi. 🧱");
+  return c;
+}
+
+document.getElementById("btnUndo").onclick = () => { const s = undo.pop(); if (!s) return setStatus("Geri alınacak bir şey yok."); restore(s); setStatus("Geri alındı."); };
+document.getElementById("btnClear").onclick = () => { snapshot(); pctx.clearRect(0, 0, TILE, TILE); cctx.clearRect(0, 0, TILE, TILE); showFired = false; dirty = true; setStatus("Karo temizlendi."); };
+document.getElementById("btnFire").onclick = () => fire();
+document.getElementById("btnPanoPng").onclick = () => downloadPano();
+addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); document.getElementById("btnUndo").click(); return; }
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const t = ["tahrir", "brush", "stamp", "fill", "eraser"][Number(e.key) - 1];
+  if (t) selectTool(t);
+  const k = e.key.toLowerCase();
+  if (k === "s") document.getElementById("btnSym").click();
+  if (k === "p") document.getElementById("btnPano").click();
+  if (k === "g") document.getElementById("btnGuides").click();
+});
+
+// ---------------------------------------------------------------------------
+// Çizim
+// ---------------------------------------------------------------------------
+function composeTile(g, withGuides) {
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  if (showFired && fired) g.drawImage(fired, 0, 0);
+  else { g.drawImage(ground, 0, 0); g.drawImage(paint, 0, 0); g.drawImage(contour, 0, 0); }
+  if (stroke.active && stroke.tool === "stamp") {
+    g.globalAlpha = 0.55;
+    eachSym(g, () => paintMotif(g, motif, stroke.ax, stroke.ay, stampSize(), stroke.angle, { fill: color, line: ink }));
+    g.globalAlpha = 1;
+  }
+  if (withGuides) drawGuides(g);
+}
+function draw() {
+  composeTile(compCtx, guides && !pano);
+  if (!pano) {
+    if (view.width !== TILE) view.width = view.height = TILE;
+    vctx.drawImage(comp, 0, 0);
+  } else {
+    const P = 1200;
+    if (view.width !== P) view.width = view.height = P;
+    vctx.drawImage(panoCanvas(comp, P / 3), 0, 0);
+    vctx.strokeStyle = "rgba(255,255,255,.35)"; vctx.lineWidth = 2; vctx.setLineDash([10, 8]);
+    vctx.strokeRect(P / 3 + 2, P / 3 + 2, P / 3 - 4, P / 3 - 4); vctx.setLineDash([]);
+  }
+  dirty = false;
+}
+
+// ---------------------------------------------------------------------------
+// Giriş: el (MediaPipe) + fare
+// ---------------------------------------------------------------------------
+const hands = [null, null];
+const mouse = { inside: false, down: false, x: 0, y: 0 };
+let landmarker = null, camOn = false, lastVideoTime = -1;
+const wasPinch = {};
+let owner = null; // vuruşu yapan girişin kimliği
+
+view.addEventListener("pointerdown", (e) => { mouse.down = true; mouse.x = e.clientX; mouse.y = e.clientY; view.setPointerCapture(e.pointerId); });
+addEventListener("pointermove", (e) => { mouse.x = e.clientX; mouse.y = e.clientY; mouse.inside = true; });
+addEventListener("pointerup", () => (mouse.down = false));
+addEventListener("pointercancel", () => (mouse.down = false));
+
+async function loadLandmarker() {
+  setStatus("El takibi modeli yükleniyor…");
+  const { FilesetResolver, HandLandmarker } = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs");
+  const files = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
+  const opts = (delegate) => ({
+    baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task", delegate },
+    runningMode: "VIDEO", numHands: 2, minHandDetectionConfidence: 0.6, minTrackingConfidence: 0.5,
+  });
+  try { return await HandLandmarker.createFromOptions(files, opts("GPU")); }
+  catch { return await HandLandmarker.createFromOptions(files, opts("CPU")); }
+}
+
+async function toggleCamera() {
+  const btn = document.getElementById("btnCam");
+  if (camOn) {
+    video.srcObject?.getTracks().forEach((t) => t.stop());
+    video.srcObject = null; video.classList.remove("on"); camOn = false; hands[0] = hands[1] = null;
+    btn.textContent = "📷 Kamera"; setStatus("Kamera kapalı."); return;
+  }
+  try {
+    btn.disabled = true;
+    if (!landmarker) landmarker = await loadLandmarker();
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" }, audio: false });
+    video.srcObject = stream; await video.play();
+    video.classList.add("on"); camOn = true; btn.textContent = "📷 Kapat";
+    setStatus("Elini göster. Pinch = fırça karoya değer; düğmelerin üstünde pinch = seç.");
+  } catch (err) {
+    console.error(err);
+    setStatus("Kamera açılamadı: " + (err?.message || err) + " — fareyle devam edebilirsin.");
+  } finally { btn.disabled = false; }
+}
+document.getElementById("btnCam").onclick = toggleCamera;
+
+function videoToScreen(nx, ny) {
+  const W = innerWidth, H = innerHeight, vw = video.videoWidth || 1280, vh = video.videoHeight || 720;
+  const s = Math.max(W / vw, H / vh), dw = vw * s, dh = vh * s;
+  return { x: (W - dw) / 2 + (1 - nx) * dw, y: (H - dh) / 2 + ny * dh };
+}
+
+// --- Kararlı el işaretçisi -------------------------------------------------
+// One Euro filtresi: el yavaşken titreşimi güçlü biçimde bastırır,
+// hızlı hareket ederken gecikmeyi azaltır.
+class OneEuro {
+  constructor(minCutoff = 1.0, beta = 0.004, dCutoff = 1.0) { Object.assign(this, { minCutoff, beta, dCutoff, x: null, dx: 0, t: 0 }); }
+  static alpha(cutoff, dt) { const tau = 1 / (2 * Math.PI * cutoff); return 1 / (1 + tau / dt); }
+  filter(x, t) {
+    if (this.x === null) { this.x = x; this.t = t; return x; }
+    const dt = Math.max(1e-3, t - this.t); this.t = t;
+    this.dx += OneEuro.alpha(this.dCutoff, dt) * ((x - this.x) / dt - this.dx);
+    const cutoff = this.minCutoff + this.beta * Math.abs(this.dx);
+    this.x += OneEuro.alpha(cutoff, dt) * (x - this.x);
+    return this.x;
+  }
+}
+const STABILITY = { minCutoff: 0.5, beta: 0.004 }; // minCutoff küçüldükçe daha durgun, beta büyüdükçe daha çevik
+const newHandFilter = () => ({ x: new OneEuro(STABILITY.minCutoff, STABILITY.beta), y: new OneEuro(STABILITY.minCutoff, STABILITY.beta), pinchVotes: 0, raw: null });
+const handFilters = [newHandFilter(), newHandFilter()];
+
+function readHands() {
+  if (!camOn || !landmarker || video.readyState < 2 || video.currentTime === lastVideoTime) return;
+  lastVideoTime = video.currentTime;
+  let lms = (landmarker.detectForVideo(video, performance.now()).landmarks || []).slice(0, 2);
+  // İki el varsa sıra kareden kareye değişebilir: önceki konumlara en yakın eşleşmeyi koru
+  if (lms.length === 2 && handFilters[0].raw && handFilters[1].raw) {
+    const d = (lm, f) => Math.hypot(lm[0].x - f.raw.x, lm[0].y - f.raw.y);
+    if (d(lms[0], handFilters[1]) + d(lms[1], handFilters[0]) < d(lms[0], handFilters[0]) + d(lms[1], handFilters[1])) lms = [lms[1], lms[0]];
+  }
+  const t = performance.now() / 1000;
+  for (let h = 0; h < 2; h++) {
+    const lm = lms[h];
+    if (!lm) { hands[h] = null; handFilters[h] = newHandFilter(); continue; }
+    const f = handFilters[h];
+    f.raw = { x: lm[0].x, y: lm[0].y };
+    const thumb = lm[4], index = lm[8], knuckle = lm[5];
+    // Sabit referans noktası: iki parmak ucu + işaret parmağı kökü.
+    // Pinch açılıp kapanırken iki uç simetrik yaklaştığı için nokta zıplamaz.
+    const nx = thumb.x * 0.35 + index.x * 0.35 + knuckle.x * 0.3;
+    const ny = thumb.y * 0.35 + index.y * 0.35 + knuckle.y * 0.3;
+    const sp = videoToScreen(nx, ny);
+    const x = f.x.filter(sp.x, t), y = f.y.filter(sp.y, t);
+    // Pinch: histerezis + durum değişikliği için 2 kare onay (titrek tıklamaları önler)
+    const size = Math.hypot(lm[0].x - lm[9].x, lm[0].y - lm[9].y) || 0.1;
+    const ratio = Math.hypot(thumb.x - index.x, thumb.y - index.y) / size;
+    const was = !!hands[h]?.pinch;
+    const want = was ? ratio < 0.45 : ratio < 0.32;
+    f.pinchVotes = want !== was ? f.pinchVotes + 1 : 0;
+    const pinch = f.pinchVotes >= 2 ? want : was;
+    if (f.pinchVotes >= 2) f.pinchVotes = 0;
+    hands[h] = { x, y, pinch };
+  }
+}
+
+function screenToTile(x, y) {
+  const r = view.getBoundingClientRect();
+  const inside = x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+  let u = (x - r.left) / r.width, v = (y - r.top) / r.height;
+  if (pano) {
+    u *= 3; v *= 3;
+    const i = Math.min(2, Math.max(0, Math.floor(u))), j = Math.min(2, Math.max(0, Math.floor(v)));
+    u -= i; v -= j;
+    if (panoMirror) { if (i % 2 === 0) u = 1 - u; if (j % 2 === 0) v = 1 - v; }
+  }
+  return { x: u * TILE, y: v * TILE, inside };
+}
+const tileScreenScale = () => view.getBoundingClientRect().width / (pano ? 3 : 1) / TILE;
+
+function inputs() {
+  const list = [];
+  hands.forEach((h, i) => h && list.push({ id: "h" + i, x: h.x, y: h.y, active: h.pinch, hand: true }));
+  if (!camOn || mouse.down) list.push({ id: "mouse", x: mouse.x, y: mouse.y, active: mouse.down, hand: false, show: mouse.inside });
+  return list;
+}
+
+function handleInput(dt) {
+  const list = inputs();
+  for (const t of list) {
+    const started = t.active && !wasPinch[t.id];
+    // Elle pinch: düğmenin üstündeyse ona bas
+    if (started && t.hand) {
+      const el = document.elementFromPoint(t.x, t.y)?.closest("button, .swatch");
+      if (el) { el.click(); continue; }
+    }
+    const p = screenToTile(t.x, t.y);
+    if (started && p.inside && !owner) { owner = t.id; strokeStart(p.x, p.y); }
+  }
+  const o = owner && list.find((t) => t.id === owner);
+  if (owner && (!o || !o.active)) { strokeEnd(); owner = null; }
+  else if (o) { const p = screenToTile(o.x, o.y); strokeMove(p.x, p.y, dt); }
+  for (const id of ["h0", "h1", "mouse"]) wasPinch[id] = !!list.find((t) => t.id === id)?.active;
+  return list;
+}
+
+// ---------------------------------------------------------------------------
+// Elde tutulan aletin çizimi (imleç yerine)
+// ---------------------------------------------------------------------------
+function drawTool(x, y, active) {
+  const g = octx, ts = tileScreenScale();
+  g.save(); g.translate(x, y);
+  g.lineCap = "round";
+  if (tool === "tahrir") {
+    // Kamış kalem: ince uç tahrir mürekkebiyle ıslak
+    g.save(); g.rotate(-0.6);
+    g.strokeStyle = "#7a5634"; g.lineWidth = 6; g.beginPath(); g.moveTo(0, -16); g.lineTo(0, -92); g.stroke();
+    g.fillStyle = "#d8c49a"; g.beginPath(); g.moveTo(-4, -16); g.lineTo(4, -16); g.lineTo(0.8, -2); g.lineTo(-0.8, -2); g.fill();
+    g.fillStyle = ink; g.beginPath(); g.moveTo(-1.6, -7); g.lineTo(1.6, -7); g.lineTo(0, 0); g.fill();
+    g.restore();
+    g.fillStyle = ink; g.beginPath(); g.arc(0, 0, Math.max(1.5, (penBase() * ts) / 2), 0, Math.PI * 2); g.fill();
+  } else if (tool === "brush" || tool === "eraser") {
+    const r = brushR() * ts;
+    g.strokeStyle = "rgba(255,255,255,.8)"; g.lineWidth = 1.5; g.setLineDash([4, 4]); g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
+    g.save(); g.rotate(-0.6);
+    if (tool === "brush") {
+      g.strokeStyle = "#6d4a2c"; g.lineWidth = 7; g.beginPath(); g.moveTo(0, -18); g.lineTo(0, -95); g.stroke();
+      g.fillStyle = "#c9b48a"; g.fillRect(-6, -24, 12, 8);
+      g.fillStyle = color; g.beginPath(); g.moveTo(-7, -16); g.quadraticCurveTo(-8, -4, 0, 2); g.quadraticCurveTo(8, -4, 7, -16); g.fill();
+    } else {
+      g.fillStyle = "#f1a7a7"; g.fillRect(-11, -34, 22, 20);
+      g.fillStyle = "#3d6fb3"; g.fillRect(-11, -50, 22, 16);
+      g.fillStyle = "#f6f0e2"; g.fillRect(-11, -16, 22, 4);
+    }
+    g.restore();
+  } else if (tool === "stamp") {
+    if (!active) {
+      g.globalAlpha = 0.6;
+      paintMotif(g, motif, 0, 0, stampSize() * ts, stampAngle, { fill: color, line: ink, lw: 1.5 });
+      g.globalAlpha = 1;
+    } else {
+      g.strokeStyle = "rgba(255,255,255,.8)"; g.lineWidth = 1.5; g.beginPath(); g.moveTo(-8, 0); g.lineTo(8, 0); g.moveTo(0, -8); g.lineTo(0, 8); g.stroke();
+    }
+  } else if (tool === "fill") {
+    // Boya kovası: ucundan seçili renk damlıyor
+    g.save(); g.rotate(-0.5);
+    g.fillStyle = "#9aa3ad"; g.beginPath(); g.moveTo(-16, -44); g.lineTo(16, -44); g.lineTo(12, -14); g.lineTo(-12, -14); g.closePath(); g.fill();
+    g.strokeStyle = "#5f6670"; g.lineWidth = 2; g.beginPath(); g.arc(0, -44, 16, Math.PI, 0); g.stroke();
+    g.fillStyle = color; g.beginPath(); g.ellipse(0, -44, 16, 4, 0, 0, Math.PI * 2); g.fill();
+    g.restore();
+    g.fillStyle = color; g.beginPath(); g.arc(0, 0, 5, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = "rgba(255,255,255,.8)"; g.lineWidth = 1.5; g.stroke();
+  }
+  if (active) { g.strokeStyle = "rgba(255,255,255,.7)"; g.lineWidth = 2; g.beginPath(); g.arc(0, 0, 14, 0, Math.PI * 2); g.stroke(); }
+  g.restore();
+}
+
+// ---------------------------------------------------------------------------
+// Yerleşim ve döngü
+// ---------------------------------------------------------------------------
+function layout() {
+  overlay.width = innerWidth * devicePixelRatio; overlay.height = innerHeight * devicePixelRatio;
+  octx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+  const narrow = innerWidth <= 1000;
+  const bar = document.getElementById("bar"), tools = document.getElementById("tools"), opts = document.getElementById("opts"), hud = document.querySelector(".hud");
+  let top, bottomReserve, left, right;
+  if (narrow) {
+    // Dar ekranda: ayarlar + aletler paletin üstünde iki satır; karo kalan boşluğa sığar
+    tools.style.bottom = bar.offsetHeight + 24 + "px";
+    opts.style.top = ""; opts.style.maxHeight = "";
+    opts.style.bottom = bar.offsetHeight + tools.offsetHeight + 32 + "px";
+    top = hud.getBoundingClientRect().bottom + 12;
+    bottomReserve = bar.offsetHeight + tools.offsetHeight + opts.offsetHeight + 52;
+    left = 16; right = innerWidth - 16;
+  } else {
+    tools.style.bottom = ""; opts.style.bottom = "";
+    const hb = hud.getBoundingClientRect().bottom;
+    opts.style.top = hb + 10 + "px";
+    opts.style.maxHeight = Math.max(120, innerHeight - hb - 10 - 16) + "px";
+    top = 16; bottomReserve = bar.offsetHeight + 36;
+    left = Math.max(hud.getBoundingClientRect().right, opts.getBoundingClientRect().right) + 24;
+    right = tools.getBoundingClientRect().left - 24;
+  }
+  const availW = right - left, availH = innerHeight - top - bottomReserve;
+  const s = Math.max(120, Math.min(availW, availH));
+  view.style.width = view.style.height = s + "px";
+  view.style.left = left + (availW - s) / 2 + "px";
+  view.style.top = top + Math.max(0, (availH - s) / 2) + "px";
+  dirty = true;
+}
+addEventListener("resize", layout);
+selectTool("tahrir");
+setSymmetry("r8", true);
+setGuides(true);
+setPano(false, false);
+setEraseMode("paint");
+document.querySelectorAll("#motifs button").forEach((b) => b.classList.toggle("on", b.dataset.motif === motif));
+layout();
+setStatus("Bir alet ve renk seç, karoya dokun. Simetri: 8'li.");
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min((now - last) / 1000, 0.1); last = now;
+  readHands();
+  const list = handleInput(dt);
+  if (dirty) draw();
+  octx.clearRect(0, 0, innerWidth, innerHeight);
+  for (const t of list) {
+    if (t.id === "mouse" && !t.show) continue;
+    if (t.id === "mouse" && !screenToTile(t.x, t.y).inside && !mouse.down) continue;
+    drawTool(t.x, t.y, t.active);
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// ---------------------------------------------------------------------------
+// Test kancaları
+// ---------------------------------------------------------------------------
+window.__cini = {
+  get state() {
+    return { tool, color, ink, motif, sym, symCopies: symMatrices().length, guides, pano, panoMirror, eraseMode, fillTol, size: sizeK(), stampAngle, undo: undo.length, showFired, strokeActive: stroke.active };
+  },
+  set fillTol(v) { fillTol = v; },
+  layers: { paint, contour, view, comp },
+  TILE, PALETTE, MOTIFS: Object.keys(MOTIFS), TEMPLATES: Object.keys(TEMPLATES), SYM_MODES,
+  selectTool, selectColor, selectMotif, setSymmetry, setGuides, setPano, setEraseMode,
+  setPaint: (c) => selectColor(c, c, "paint"),
+  setInk: (c) => selectColor(c, c, "ink"),
+  setSize: (k) => { sizeEl.value = String(k); dirty = true; },
+  applyTemplate,
+  strokeStart, strokeMove, strokeEnd,
+  stroke: strokePath,                                   // ([[x,y],...], tool?)
+  fill: (x, y, c = color) => { snapshot(); showFired = false; const ok = fillAt(x, y, c); if (!ok) undo.pop(); draw(); return ok; },
+  stamp: (x, y, o = {}) => { snapshot(); showFired = false; stampAt(x, y, o.angle ?? stampAngle, o); draw(); },
+  undo: () => document.getElementById("btnUndo").click(),
+  clear: () => document.getElementById("btnClear").click(),
+  glaze, fire, downloadPano, panoCanvas,
+  draw,
+};
+</script>
+</body>
+</html>

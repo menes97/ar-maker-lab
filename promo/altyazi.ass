@@ -1,0 +1,35 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Alt,Segoe UI Black,62,&H00FFFFFF,&H00FFFFFF,&H28120F0D,&H28120F0D,-1,0,0,0,100,100,0,0,3,18,0,5,70,70,0,1
+Style: Hook,Segoe UI Black,80,&H00FFFFFF,&H00FFFFFF,&H28120F0D,&H28120F0D,-1,0,0,0,100,100,0,0,3,20,0,5,60,60,0,1
+Style: Url,Segoe UI Black,72,&H0043B4F2,&H00FFFFFF,&H00141414,&HC8000000,-1,0,0,0,100,100,0,0,3,22,0,5,40,40,0,1
+Style: Marka,Segoe UI Black,58,&H0043B4F2,&H00FFFFFF,&H00141414,&H96000000,-1,0,0,0,100,100,1,0,1,5,2,5,40,40,0,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:03.00,Hook,,0,0,0,,{\pos(540,1180)\fad(80,0)}Havada, elinle\Nebru yap, kilim doku.
+Dialogue: 0,0:00:03.00,0:00:07.15,Alt,,0,0,0,,{\pos(540,1180)}Bu, AR Maker Lab:\Ntarayıcıda açılan yedi atölye.
+Dialogue: 0,0:00:07.15,0:00:10.30,Alt,,0,0,0,,{\pos(540,1180)}Kurulum yok, kumanda yok;\Nsadece elin.
+Dialogue: 0,0:00:10.30,0:00:13.35,Alt,,0,0,0,,{\pos(540,1180)}Ebruda fırçayla boya serp,\Ntarakla tara.
+Dialogue: 0,0:00:13.35,0:00:16.45,Alt,,0,0,0,,{\pos(540,1180)}Bizi çektiğinde lale\Nkendiliğinden açılır.
+Dialogue: 0,0:00:16.45,0:00:19.95,Alt,,0,0,0,,{\pos(540,1180)}Kilim tezgâhında mekiği geçir,\Nkirkitle sıkıştır;
+Dialogue: 0,0:00:19.95,0:00:21.80,Alt,,0,0,0,,{\pos(540,1180)}motif sıra sıra büyür.
+Dialogue: 0,0:00:21.80,0:00:25.30,Alt,,0,0,0,,{\pos(540,1180)}Çinide bir çizgi çek,\Nsimetri onu sekize çoğaltsın.
+Dialogue: 0,0:00:25.30,0:00:28.55,Alt,,0,0,0,,{\pos(540,1180)}Sonra sırla, fırınla,\Nkaron hazır.
+Dialogue: 0,0:00:28.55,0:00:30.30,Alt,,0,0,0,,{\pos(540,1180)}Karagöz'ü elinle oynat.
+Dialogue: 0,0:00:30.30,0:00:33.05,Alt,,0,0,0,,{\pos(540,1180)}Elini uzaklaştırınca\Ngölge bulanıklaşır,
+Dialogue: 0,0:00:33.05,0:00:35.00,Alt,,0,0,0,,{\pos(540,1180)}tıpkı gerçek perdedeki gibi.
+Dialogue: 0,0:00:35.00,0:00:38.55,Alt,,0,0,0,,{\pos(540,1180)}Bir de çömlek çarkı, kâğıt uçak\Nve yapı blokları var.
+Dialogue: 0,0:00:38.55,0:00:42.50,Alt,,0,0,0,,{\pos(540,1180)}El takibi telefonunda çalışır,\Ngörüntün hiçbir yere gitmez.
+Dialogue: 0,0:00:42.50,0:00:47.65,Alt,,0,0,0,,{\pos(540,1340)}Hepsi ücretsiz
+Dialogue: 1,0:00:42.70,0:00:47.65,Url,,0,0,0,,{\pos(540,1480)\fad(150,0)}ar-maker-lab.vercel.app
+Dialogue: 0,0:00:47.65,0:00:52.40,Alt,,0,0,0,,{\pos(540,1180)}Sen ilk önce hangisini denerdin?
+Dialogue: 0,0:00:49.85,0:00:52.40,Hook,,0,0,0,,{\pos(540,1330)\fad(120,0)}Ebru? Kilim? Karagöz?
+Dialogue: 0,0:00:03.00,0:00:07.15,Marka,,0,0,0,,{\pos(540,1530)}✋ AR MAKER LAB

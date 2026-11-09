@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AR Origami</title>
+<style>
+  :root { --panel: rgba(16, 18, 24, 0.74); --line: rgba(255,255,255,.12); --text: #f2f4f8; --muted: #aab3c2; --accent: #e9524a; --accent2: #7fc4e8; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: radial-gradient(ellipse at 50% 35%, #2b3140, #10131a); color: var(--text); font: 14px/1.4 system-ui, "Segoe UI", sans-serif; }
+  #video { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); opacity: 0; transition: opacity .4s; }
+  #video.on { opacity: 1; }
+  #gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  .hud { position: fixed; left: 16px; top: 16px; width: min(400px, calc(100vw - 32px)); padding: 12px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; backdrop-filter: blur(8px); }
+  .hud h1 { margin: 0 0 6px; font-size: 16px; }
+  .step { font-weight: 650; }
+  .step small { color: var(--muted); font-weight: 500; margin-left: 6px; }
+  .hud p { margin: 4px 0 0; color: var(--muted); font-size: 12.5px; }
+  #text { color: var(--text); }
+  .prog { height: 4px; background: rgba(255,255,255,.1); border-radius: 2px; margin-top: 8px; overflow: hidden; }
+  .prog i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+  .bar { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; padding: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; backdrop-filter: blur(8px); max-width: calc(100vw - 32px); }
+  .bar button { border: 1px solid var(--line); background: rgba(255,255,255,.06); color: var(--text); padding: 9px 13px; border-radius: 10px; font: inherit; cursor: pointer; }
+  .bar button:hover:not(:disabled) { background: rgba(255,255,255,.12); }
+  .bar button:disabled { opacity: .4; cursor: default; }
+  .bar button.primary { background: var(--accent); border-color: transparent; color: #fff; font-weight: 600; }
+  .cursor { position: fixed; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; border: 2px solid var(--accent2); pointer-events: none; display: none; }
+  .cursor.pinch { border-color: #ffd36b; background: rgba(255, 211, 107, .25); }
+  .cursor.grab { border-color: var(--accent); background: rgba(233, 82, 74, .45); }
+  @media (max-width: 560px) { .hud p.long { display: none; } }
+</style>
+<script type="importmap">
+  { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+<video id="video" playsinline muted></video>
+<canvas id="gl"></canvas>
+<div class="cursor" id="cur0"></div>
+<div class="cursor" id="cur1"></div>
+<div class="cursor" id="cur2"></div>
+
+<div class="hud">
+  <h1><a href="../" data-home-link title="Tüm atölyeler" style="color:inherit;text-decoration:none;opacity:.7;margin-right:6px;font-weight:400">←</a>📄 AR Origami — Kâğıt Uçak</h1>
+  <div class="step" id="stepTitle"></div>
+  <p id="text"></p>
+  <p class="long">🤏 Parlayan noktayı başparmak + işaret parmağıyla tut (pinch), kesikli yay boyunca sürükle, bırak. 🖱️ Fareyle de sürükleyebilirsin.</p>
+  <div class="prog"><i id="prog"></i></div>
+</div>
+
+<div class="bar">
+  <button id="btnCam" class="primary">📷 Kamerayı aç</button>
+  <button id="btnShow">▶ Göster</button>
+  <button id="btnBack">↶ Geri</button>
+  <button id="btnReset">⟲ Baştan</button>
+  <button id="btnLaunch" disabled>✈️ Fırlat</button>
+</div>
+
+<script type="module">
+import * as THREE from "three";
+
+// ---------------------------------------------------------------------------
+// Sahne
+// ---------------------------------------------------------------------------
+const canvas = document.getElementById("gl");
+const video = document.getElementById("video");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(40, 1, 0.05, 50);
+const LOOK = new THREE.Vector3(0, 0, 0.05);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x445066, 1.4));
+const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+sun.position.set(1.2, 3, 1.5);
+sun.castShadow = true;
+sun.shadow.mapSize.set(1024, 1024);
+Object.assign(sun.shadow.camera, { left: -1.5, right: 1.5, top: 1.5, bottom: -1.5 });
+sun.shadow.bias = -0.0005;
+scene.add(sun);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(8, 8), new THREE.ShadowMaterial({ opacity: 0.28 }));
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = -0.002;
+ground.receiveShadow = true;
+scene.add(ground);
+
+const root = new THREE.Group(); // son poz ve fırlatma için tüm modeli taşıyan grup
+root.matrixAutoUpdate = false;
+scene.add(root);
+
+// ---------------------------------------------------------------------------
+// Kâğıt modeli: düz yüzeyler (facet). Her yüzeyin kâğıt-uzayı çokgeni (u,v)
+// ve kâğıt-uzayından dünyaya dönüşümü (M) vardır. Katlama = çizgiyle bölüp
+// hareket eden tarafı çizgi etrafında döndürmek.
+// ---------------------------------------------------------------------------
+const W = 1.0, HL = 1.414 / 2, EPS = 1e-6, LAYER = 0.0022;
+const FRONT = new THREE.MeshStandardMaterial({ color: 0xe9524a, roughness: 0.85, side: THREE.FrontSide });
+const BACK = new THREE.MeshStandardMaterial({ color: 0xf5f0e6, roughness: 0.9, side: THREE.BackSide });
+const EDGE = new THREE.LineBasicMaterial({ color: 0x5a1f1b, transparent: true, opacity: 0.35 });
+
+let facets = [];
+function newPaper() {
+  facets = [{ poly: [[-W / 2, -HL], [W / 2, -HL], [W / 2, HL], [-W / 2, HL]], M: new THREE.Matrix4(), layer: 0, tags: new Set() }];
+}
+const cloneFacets = (fs) => fs.map((f) => ({ poly: f.poly.map((p) => p.slice()), M: f.M.clone(), layer: f.layer, tags: new Set(f.tags) }));
+const toWorld = (f, [u, v]) => new THREE.Vector3(u, 0, v).applyMatrix4(f.M);
+const paperCentroid = (f) => f.poly.reduce((a, p) => [a[0] + p[0] / f.poly.length, a[1] + p[1] / f.poly.length], [0, 0]);
+function polyArea(poly) {
+  let a = 0;
+  for (let i = 0; i < poly.length; i++) { const p = poly[i], q = poly[(i + 1) % poly.length]; a += p[0] * q[1] - q[0] * p[1]; }
+  return Math.abs(a) / 2;
+}
+
+/** Dışbükey yüzeyi dünya düzlemindeki bir çizgiyle (A, n) ikiye böl. */
+function splitFacet(f, A, n) {
+  const pts = f.poly.map((p) => { const w = toWorld(f, p); return { p, s: (w.x - A.x) * n.x + (w.z - A.z) * n.z }; });
+  const pos = [], neg = [];
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length];
+    if (a.s >= -EPS) pos.push(a.p);
+    if (a.s <= EPS) neg.push(a.p);
+    if ((a.s > EPS && b.s < -EPS) || (a.s < -EPS && b.s > EPS)) {
+      const t = a.s / (a.s - b.s);
+      const q = [a.p[0] + (b.p[0] - a.p[0]) * t, a.p[1] + (b.p[1] - a.p[1]) * t];
+      pos.push(q); neg.push(q.slice());
+    }
+  }
+  return [pos, neg]
+    .filter((poly) => poly.length >= 3 && polyArea(poly) > 1e-7)
+    .map((poly) => ({ poly, M: f.M.clone(), layer: f.layer, tags: new Set(f.tags) }));
+}
+
+function rotAboutLine(A, d, theta) {
+  const m = new THREE.Matrix4().makeTranslation(A.x, A.y, A.z);
+  m.multiply(new THREE.Matrix4().makeRotationAxis(d, theta));
+  m.multiply(new THREE.Matrix4().makeTranslation(-A.x, -A.y, -A.z));
+  return m;
+}
+
+// ---------------------------------------------------------------------------
+// Adımlar (klasik "dart" kâğıt uçak). Koordinatlar dünya düzleminde (x, z);
+// burun -z yönünde (ekranın üstü).
+// ---------------------------------------------------------------------------
+const WING = 0.16;
+const STEPS = [
+  { title: "Sol köşeyi ortaya katla", text: "Sol üst köşeyi orta çizgiye getir.", kind: "fold", a: [0, -HL], b: [-0.5, -HL + 0.5], handle: [-0.44, -HL + 0.05] },
+  { title: "Sağ köşeyi ortaya katla", text: "Sağ üst köşeyi de orta çizgiye getir.", kind: "fold", a: [0, -HL], b: [0.5, -HL + 0.5], handle: [0.44, -HL + 0.05] },
+  { title: "Sol kenarı ortaya katla", text: "Eğik sol kenarı tekrar orta çizgiye katla; burun sivrilsin.", kind: "fold", a: [0, -HL], b: [-0.5, 0.5], handle: [-0.46, 0.05] },
+  { title: "Sağ kenarı ortaya katla", text: "Aynısını sağ tarafa yap.", kind: "fold", a: [0, -HL], b: [0.5, 0.5], handle: [0.46, 0.05] },
+  { title: "Kâğıdı çevir", text: "Kâğıdı ters çevir; kapaklar alta gelsin.", kind: "flip", a: [0, -HL], b: [0, HL], handle: [-0.4, 0.55] },
+  { title: "Ortadan ikiye katla", text: "Sol yarıyı sağ yarının üstüne katla.", kind: "fold", a: [0, -HL], b: [0, HL], handle: [-0.42, 0.55] },
+  { title: "Üst kanadı indir", text: "Üstteki katmanı kanat çizgisinden katla.", kind: "fold", a: [0, -HL], b: [WING, HL], handle: [0.42, 0.6], select: { tag: 5 } },
+  { title: "Uçağı çevir", text: "Uçağı öbür yüzüne çevir.", kind: "flip", a: [0, -HL], b: [0, HL], handle: [0.3, 0.55] },
+  { title: "Diğer kanadı indir", text: "İkinci kanadı da aynı çizgiden katla.", kind: "fold", a: [0, -HL], b: [-WING, HL], handle: [-0.42, 0.6], select: { notTag: 5 } },
+  { title: "Kanatları aç", text: "Uçağı gövdesinden tutup kaldır; kanatlar açılsın.", kind: "pose", a: [0, -HL], b: [-WING, HL], up: 8, down: 6, handle: [-0.04, 0.35] },
+];
+
+// ---------------------------------------------------------------------------
+// Durum ve çizim
+// ---------------------------------------------------------------------------
+const st = { i: 0, p: 0, anim: null, history: [], moving: new Set(), axis: null, done: false, launch: 0 };
+let objs = [];
+
+function topY() { return (Math.max(0, ...facets.map((f) => f.layer)) + 1) * LAYER; }
+
+function rebuildObjects() {
+  objs.forEach((o) => { root.remove(o); o.children.forEach((c) => c.geometry.dispose()); });
+  objs = facets.map((f) => {
+    const pts = f.poly.map(([u, v]) => new THREE.Vector3(u, 0, v));
+    const pos = [];
+    for (let k = 1; k < pts.length - 1; k++) {
+      let [a, b, c] = [pts[0], pts[k], pts[k + 1]];
+      const ny = new THREE.Vector3().subVectors(b, a).cross(new THREE.Vector3().subVectors(c, a)).y;
+      if (ny < 0) [b, c] = [c, b]; // ön yüz +y'ye baksın
+      pos.push(a.x, 0, a.z, b.x, 0, b.z, c.x, 0, c.z);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    g.computeVertexNormals();
+    const grp = new THREE.Group();
+    grp.matrixAutoUpdate = false;
+    const front = new THREE.Mesh(g, FRONT), back = new THREE.Mesh(g, BACK);
+    front.castShadow = back.castShadow = true;
+    const edge = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), EDGE);
+    grp.add(front, back, edge);
+    root.add(grp);
+    return grp;
+  });
+}
+
+// Rehber çizgiler
+const guide = new THREE.Group();
+scene.add(guide);
+const creaseMat = new THREE.LineDashedMaterial({ color: 0xffffff, dashSize: 0.04, gapSize: 0.03, transparent: true, opacity: 0.9 });
+const pathMat = new THREE.LineDashedMaterial({ color: 0xffd36b, dashSize: 0.03, gapSize: 0.025 });
+const handle = new THREE.Mesh(new THREE.SphereGeometry(0.03, 20, 16), new THREE.MeshBasicMaterial({ color: 0xffd36b }));
+const ghost = new THREE.Mesh(new THREE.SphereGeometry(0.022, 16, 12), new THREE.MeshBasicMaterial({ color: 0xffd36b, transparent: true, opacity: 0.4 }));
+scene.add(handle, ghost);
+
+/** Adım başında: çizgiyle böl, hareket eden yüzeyleri ve dönme eksenini hazırla. */
+function prepareStep() {
+  const s = STEPS[st.i];
+  st.p = 0; st.moving = new Set();
+  guide.clear();
+  if (!s) { handle.visible = ghost.visible = false; rebuildObjects(); applyProgress(0); updateHud(); return; }
+
+  const A = new THREE.Vector3(s.a[0], 0, s.a[1]), B = new THREE.Vector3(s.b[0], 0, s.b[1]);
+  const d = new THREE.Vector3().subVectors(B, A).normalize();
+  const H = new THREE.Vector3(s.handle[0], 0, s.handle[1]);
+  let n = new THREE.Vector3(-d.z, 0, d.x);
+  if (n.dot(new THREE.Vector3().subVectors(H, A)) < 0) n.negate(); // n: hareket eden tarafa
+  // Vadi katı: hareket eden taraf önce yukarı kalksın -> (d x n).y > 0
+  if (new THREE.Vector3().crossVectors(d, n).y < 0) d.negate();
+  st.axis = { A, d, n };
+
+  if (s.kind === "fold") {
+    const sel = (f) => !s.select || (s.select.tag != null ? f.tags.has(s.select.tag) : !f.tags.has(s.select.notTag));
+    facets = facets.flatMap((f) => (sel(f) ? splitFacet(f, A, n) : [f]));
+    facets.forEach((f, k) => {
+      if (!sel(f)) return;
+      const c = toWorld(f, paperCentroid(f));
+      if ((c.x - A.x) * n.x + (c.z - A.z) * n.z > 1e-5) st.moving.add(k);
+    });
+  } else if (s.kind === "flip") {
+    facets.forEach((_, k) => st.moving.add(k));
+  }
+  rebuildObjects();
+
+  // Kat çizgisi
+  if (s.kind !== "pose") {
+    const y = topY() + 0.003;
+    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([A.clone().setY(y), B.clone().setY(y)]), creaseMat);
+    line.computeLineDistances();
+    guide.add(line);
+  }
+  // Tutma noktası ve yolu (gerçek katlama yayı)
+  st.handle0 = H.clone().setY(topY());
+  const path = [];
+  for (let k = 0; k <= 24; k++) path.push(handleAt(k / 24));
+  const pl = new THREE.Line(new THREE.BufferGeometry().setFromPoints(path), pathMat);
+  pl.computeLineDistances();
+  guide.add(pl);
+  ghost.position.copy(path[path.length - 1]);
+  handle.visible = ghost.visible = true;
+  applyProgress(0);
+  updateHud();
+}
+
+function stepMatrix(p) {
+  const s = STEPS[st.i], { A, d } = st.axis;
+  const R = rotAboutLine(A, d, Math.PI * p);
+  if (s.kind === "flip") R.premultiply(new THREE.Matrix4().makeTranslation(0, 0.55 * Math.sin(Math.PI * p), 0));
+  return R;
+}
+
+function poseRoot(p) {
+  const e = p * p * (3 - 2 * p);
+  return new THREE.Matrix4()
+    .makeTranslation(0, 0.42 * e, 0.1 * e)
+    .multiply(new THREE.Matrix4().makeRotationY(-0.45 * e))
+    .multiply(new THREE.Matrix4().makeRotationX(0.12 * e))
+    .multiply(new THREE.Matrix4().makeRotationZ(-Math.PI / 2 * e));
+}
+
+function handleAt(p) {
+  const s = STEPS[st.i];
+  if (s.kind === "pose") return st.handle0.clone().applyMatrix4(poseRoot(p));
+  return st.handle0.clone().applyMatrix4(stepMatrix(p));
+}
+
+/** p (0..1) ilerlemesine göre tüm yüzeylerin matrislerini ayarla. */
+function applyProgress(p) {
+  st.p = p;
+  const s = STEPS[st.i];
+  const off = (f) => new THREE.Matrix4().makeTranslation(0, f.layer * LAYER, 0);
+  let R = null, Rup = null, Rdown = null;
+  if (s && s.kind !== "pose") R = stepMatrix(p);
+  // Poz adımı sırasında ilerlemeyle, bittikten sonra tam açık; katman ofseti kanatla birlikte döner.
+  const pose = s?.kind === "pose" ? { A: st.axis.A, d: st.axis.d, up: s.up, down: s.down, p } : st.done ? { ...st.poseInfo, p: 1 } : null;
+  if (pose) {
+    const { A, d } = pose, e = pose.p * pose.p * (3 - 2 * pose.p);
+    // Tutma noktası gövde (iç) tarafında; d, iç tarafı +θ ile yukarı kaldırır.
+    Rup = rotAboutLine(A, d, Math.PI / 2 * e);
+    Rdown = rotAboutLine(A, d, -Math.PI / 2 * e);
+  }
+  facets.forEach((f, k) => {
+    const m = off(f).multiply(f.M);
+    if (R && st.moving.has(k)) m.premultiply(R);
+    if (Rup && f.tags.has(pose.up)) m.premultiply(Rup);
+    if (Rdown && f.tags.has(pose.down)) m.premultiply(Rdown);
+    objs[k].matrix.copy(m);
+    objs[k].matrixWorldNeedsUpdate = true;
+  });
+  const poseP = s?.kind === "pose" ? p : st.done ? 1 : 0;
+  root.matrix.copy(poseRoot(poseP));
+  if (st.launch > 0) {
+    const t = st.launch;
+    root.matrix.premultiply(new THREE.Matrix4().makeTranslation(0, 0.6 * t + 0.4 * t * t, -6 * t * t));
+  }
+  root.matrixWorldNeedsUpdate = true;
+  if (s) handle.position.copy(handleAt(p));
+  document.getElementById("prog").style.width = ((st.i + (s ? p : 0)) / STEPS.length) * 100 + "%";
+}
+
+function commitStep() {
+  const s = STEPS[st.i];
+  st.history.push(cloneFacets(facets));
+  if (s.kind === "pose") {
+    // Poz M'ye yazılmaz; applyProgress bitmiş pozu her karede uygular.
+    st.poseInfo = { A: st.axis.A, d: st.axis.d, up: s.up, down: s.down };
+    st.done = true; st.i++;
+  } else {
+    const R = rotAboutLine(st.axis.A, st.axis.d, Math.PI);
+    const all = Math.max(...facets.map((f) => f.layer));
+    const movers = [...st.moving].map((k) => facets[k]);
+    const maxM = Math.max(...movers.map((f) => f.layer));
+    movers.forEach((f) => {
+      f.M.premultiply(R);
+      f.layer = all + 1 + (maxM - f.layer); // katlanan katmanlar ters sırayla üste biner
+      f.tags.add(st.i);
+    });
+    st.i++;
+  }
+  prepareStep();
+  if (st.done) setText("Tamamlandı! ✈️", "Uçağın hazır. Fırlat düğmesine bas ya da tutup ileri it.");
+  document.getElementById("btnLaunch").disabled = !st.done;
+}
+
+function animateTo(target, dur, then) {
+  st.anim = { from: st.p, to: target, t: 0, dur, then };
+}
+
+function updateHud() {
+  const s = STEPS[st.i];
+  if (s) setText(`Adım ${st.i + 1}/${STEPS.length}: ${s.title}`, s.text);
+}
+function setText(title, text) {
+  document.getElementById("stepTitle").textContent = title;
+  document.getElementById("text").textContent = text;
+}
+
+// ---------------------------------------------------------------------------
+// Giriş: el (MediaPipe) + fare. Pinch = tut.
+// ---------------------------------------------------------------------------
+const cursors = [0, 1, 2].map((i) => document.getElementById("cur" + i));
+const hands = [null, null];
+const mouse = { down: false, x: 0, y: 0, pinch: true };
+let landmarker = null, camOn = false, lastVideoTime = -1, grabber = null;
+
+canvas.addEventListener("pointerdown", (e) => { mouse.down = true; mouse.x = e.clientX; mouse.y = e.clientY; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener("pointermove", (e) => { mouse.x = e.clientX; mouse.y = e.clientY; });
+canvas.addEventListener("pointerup", () => (mouse.down = false));
+canvas.addEventListener("pointercancel", () => (mouse.down = false));
+
+async function loadLandmarker() {
+  setText("El takibi", "Model yükleniyor…");
+  const { FilesetResolver, HandLandmarker } = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs");
+  const files = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
+  const opts = (delegate) => ({
+    baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task", delegate },
+    runningMode: "VIDEO", numHands: 2, minHandDetectionConfidence: 0.6, minTrackingConfidence: 0.5,
+  });
+  try { return await HandLandmarker.createFromOptions(files, opts("GPU")); }
+  catch { return await HandLandmarker.createFromOptions(files, opts("CPU")); }
+}
+
+async function toggleCamera() {
+  const btn = document.getElementById("btnCam");
+  if (camOn) {
+    video.srcObject?.getTracks().forEach((t) => t.stop());
+    video.srcObject = null; video.classList.remove("on"); camOn = false; hands[0] = hands[1] = null;
+    btn.textContent = "📷 Kamerayı aç"; updateHud(); return;
+  }
+  try {
+    btn.disabled = true;
+    if (!landmarker) landmarker = await loadLandmarker();
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" }, audio: false });
+    video.srcObject = stream; await video.play();
+    video.classList.add("on"); camOn = true; btn.textContent = "📷 Kamerayı kapat";
+    updateHud();
+  } catch (err) {
+    console.error(err);
+    setText("Kamera açılamadı", (err?.message || err) + " — fareyle devam edebilirsin.");
+  } finally { btn.disabled = false; }
+}
+
+function videoToScreen(nx, ny) {
+  const Wd = innerWidth, Hd = innerHeight, vw = video.videoWidth || 1280, vh = video.videoHeight || 720;
+  const s = Math.max(Wd / vw, Hd / vh), dw = vw * s, dh = vh * s;
+  return { x: (Wd - dw) / 2 + (1 - nx) * dw, y: (Hd - dh) / 2 + ny * dh };
+}
+
+// --- Kararlı el işaretçisi -------------------------------------------------
+// One Euro filtresi: el yavaşken titreşimi güçlü biçimde bastırır,
+// hızlı hareket ederken gecikmeyi azaltır.
+class OneEuro {
+  constructor(minCutoff = 1.0, beta = 0.004, dCutoff = 1.0) { Object.assign(this, { minCutoff, beta, dCutoff, x: null, dx: 0, t: 0 }); }
+  static alpha(cutoff, dt) { const tau = 1 / (2 * Math.PI * cutoff); return 1 / (1 + tau / dt); }
+  filter(x, t) {
+    if (this.x === null) { this.x = x; this.t = t; return x; }
+    const dt = Math.max(1e-3, t - this.t); this.t = t;
+    this.dx += OneEuro.alpha(this.dCutoff, dt) * ((x - this.x) / dt - this.dx);
+    const cutoff = this.minCutoff + this.beta * Math.abs(this.dx);
+    this.x += OneEuro.alpha(cutoff, dt) * (x - this.x);
+    return this.x;
+  }
+}
+const STABILITY = { minCutoff: 0.5, beta: 0.004 }; // minCutoff küçüldükçe daha durgun, beta büyüdükçe daha çevik
+const newHandFilter = () => ({ x: new OneEuro(STABILITY.minCutoff, STABILITY.beta), y: new OneEuro(STABILITY.minCutoff, STABILITY.beta), pinchVotes: 0, raw: null });
+const handFilters = [newHandFilter(), newHandFilter()];
+
+function readHands() {
+  if (!camOn || !landmarker || video.readyState < 2 || video.currentTime === lastVideoTime) return;
+  lastVideoTime = video.currentTime;
+  let lms = (landmarker.detectForVideo(video, performance.now()).landmarks || []).slice(0, 2);
+  // İki el varsa sıra kareden kareye değişebilir: önceki konumlara en yakın eşleşmeyi koru
+  if (lms.length === 2 && handFilters[0].raw && handFilters[1].raw) {
+    const d = (lm, f) => Math.hypot(lm[0].x - f.raw.x, lm[0].y - f.raw.y);
+    if (d(lms[0], handFilters[1]) + d(lms[1], handFilters[0]) < d(lms[0], handFilters[0]) + d(lms[1], handFilters[1])) lms = [lms[1], lms[0]];
+  }
+  const t = performance.now() / 1000;
+  for (let h = 0; h < 2; h++) {
+    const lm = lms[h];
+    if (!lm) { hands[h] = null; handFilters[h] = newHandFilter(); continue; }
+    const f = handFilters[h];
+    f.raw = { x: lm[0].x, y: lm[0].y };
+    const thumb = lm[4], index = lm[8], knuckle = lm[5];
+    // Sabit referans noktası: iki parmak ucu + işaret parmağı kökü.
+    // Pinch açılıp kapanırken iki uç simetrik yaklaştığı için nokta zıplamaz.
+    const nx = thumb.x * 0.35 + index.x * 0.35 + knuckle.x * 0.3;
+    const ny = thumb.y * 0.35 + index.y * 0.35 + knuckle.y * 0.3;
+    const sp = videoToScreen(nx, ny);
+    const x = f.x.filter(sp.x, t), y = f.y.filter(sp.y, t);
+    // Pinch: histerezis + durum değişikliği için 2 kare onay (titrek tıklamaları önler)
+    const size = Math.hypot(lm[0].x - lm[9].x, lm[0].y - lm[9].y) || 0.1;
+    const ratio = Math.hypot(thumb.x - index.x, thumb.y - index.y) / size;
+    const was = !!hands[h]?.pinch;
+    const want = was ? ratio < 0.45 : ratio < 0.32;
+    f.pinchVotes = want !== was ? f.pinchVotes + 1 : 0;
+    const pinch = f.pinchVotes >= 2 ? want : was;
+    if (f.pinchVotes >= 2) f.pinchVotes = 0;
+    hands[h] = { x, y, pinch };
+  }
+}
+
+function toScreen(v) {
+  const p = v.clone().project(camera), r = canvas.getBoundingClientRect();
+  return { x: r.left + (p.x + 1) / 2 * r.width, y: r.top + (1 - p.y) / 2 * r.height };
+}
+
+/** Sürükleme: tutma noktasından hedefe giden ekran yayına en yakın ilerleme. */
+function progressFromScreen(pt) {
+  let best = st.p, bestD = Infinity;
+  for (let k = 0; k <= 60; k++) {
+    const q = toScreen(handleAt(k / 60));
+    const dd = (q.x - pt.x) ** 2 + (q.y - pt.y) ** 2;
+    if (dd < bestD) { bestD = dd; best = k / 60; }
+  }
+  // Ani sıçramaları önle
+  return THREE.MathUtils.clamp(best, st.p - 0.25, st.p + 0.25);
+}
+
+const wasPinch = {};
+function handleInput() {
+  const tools = [];
+  hands.forEach((h, i) => h && tools.push({ ...h, id: "h" + i }));
+  if (mouse.down) tools.push({ ...mouse, id: "mouse" });
+  const s = STEPS[st.i];
+  const g = grabber && tools.find((t) => t.id === grabber);
+
+  if (grabber && (!g || !g.pinch)) {
+    // bırakıldı: yarıyı geçtiyse tamamla, geçmediyse geri aç
+    grabber = null;
+    if (st.p > 0.45) animateTo(1, 0.35 * (1 - st.p) + 0.1, commitStep);
+    else animateTo(0, 0.3 * st.p + 0.05);
+  } else if (g) {
+    applyProgress(progressFromScreen(g));
+  } else if (s && !st.anim) {
+    const hs = toScreen(handle.position);
+    for (const t of tools) {
+      if (t.pinch && !wasPinch[t.id] && Math.hypot(t.x - hs.x, t.y - hs.y) < 70) { grabber = t.id; break; }
+    }
+  }
+  for (const id of ["h0", "h1", "mouse"]) wasPinch[id] = !!tools.find((t) => t.id === id)?.pinch;
+
+  cursors.forEach((c, i) => {
+    const t = tools[i];
+    if (!t || (t.id === "mouse" && !camOn)) { c.style.display = "none"; return; }
+    c.style.display = "block"; c.style.left = t.x + "px"; c.style.top = t.y + "px";
+    c.classList.toggle("pinch", !!t.pinch); c.classList.toggle("grab", t.id === grabber);
+  });
+  canvas.style.cursor = grabber ? "grabbing" : "default";
+}
+
+// ---------------------------------------------------------------------------
+// Düğmeler
+// ---------------------------------------------------------------------------
+document.getElementById("btnCam").onclick = toggleCamera;
+document.getElementById("btnShow").onclick = () => { if (STEPS[st.i] && !st.anim && !grabber) animateTo(1, 1.1, commitStep); };
+document.getElementById("btnBack").onclick = () => {
+  if (st.anim || !st.history.length) return;
+  facets = st.history.pop(); st.i--; st.done = false; st.launch = 0;
+  document.getElementById("btnLaunch").disabled = true;
+  prepareStep();
+};
+document.getElementById("btnReset").onclick = () => { st.anim = null; grabber = null; newPaper(); Object.assign(st, { i: 0, history: [], done: false, launch: 0 }); document.getElementById("btnLaunch").disabled = true; prepareStep(); };
+document.getElementById("btnLaunch").onclick = () => { if (st.done && !st.launching) st.launching = true; };
+
+// ---------------------------------------------------------------------------
+// Döngü
+// ---------------------------------------------------------------------------
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  const far = w / h < 0.8 ? 1.6 : 1;
+  camera.position.set(0, 2.2 * far, 1.55 * far);
+  camera.lookAt(LOOK);
+  camera.updateProjectionMatrix();
+}
+addEventListener("resize", resize);
+resize();
+
+newPaper();
+prepareStep();
+
+const clock = new THREE.Clock();
+function frame() {
+  const dt = Math.min(clock.getDelta(), 0.1);
+  readHands();
+  if (st.anim) {
+    const a = st.anim;
+    a.t = Math.min(1, a.t + dt / a.dur);
+    const e = a.t * a.t * (3 - 2 * a.t);
+    applyProgress(a.from + (a.to - a.from) * e);
+    if (a.t >= 1) { st.anim = null; a.then?.(); }
+  } else handleInput();
+  if (st.launching) {
+    st.launch += dt / 1.6;
+    if (st.launch >= 1) { st.launching = false; st.launch = 0; setText("Harika uçuş! 🎉", "Baştan düğmesiyle yeni bir kâğıt al."); }
+    applyProgress(st.p);
+  }
+  const pulse = 1 + 0.25 * Math.sin(performance.now() / 180);
+  handle.scale.setScalar(grabber ? 1.4 : pulse);
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+window.__origami = { st, STEPS, get facets() { return facets; }, applyProgress, commitStep, prepareStep, toScreen, handleAt, handle };
+</script>
+</body>
+</html>

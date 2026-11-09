@@ -1,0 +1,15 @@
+# AR Maker Lab — tanıtım Reels, seslendirme metni V2
+[0: ebru deseni hızla oluşuyor, imleç tarak gibi geçiyor] Havada, elinle ebru yap, kilim doku.
+[logo + ana sayfa kartları] Bu, AR Maker Lab: tarayıcıda açılan yedi atölye.
+[ana sayfa kayıyor, kamera düğmesi] Kurulum yok, kumanda yok; sadece elin.
+[ebru: fırça serpiyor, tarak geçiyor] Ebruda fırçayla boya serp, tarakla tara.
+[ebru: lale bizi lale açıyor] Bizi çektiğinde lale kendiliğinden açılır.
+[kilim: mekik satırı dokuyor, kirkit iniyor] Kilim tezgâhında mekiği geçir, kirkitle sıkıştır; motif sıra sıra büyür.
+[çini: tek çizgi sekize çoğalıyor, damgalar] Çinide bir çizgi çek, simetri onu sekize çoğaltsın.
+[çini: sırla ve fırınla parıltısı] Sonra sırla, fırınla, karon hazır.
+[karagöz: kafa atma] Karagöz'ü elinle oynat.
+[karagöz: uzaktaki gölge bulanık] Elini uzaklaştırınca gölge bulanıklaşır, tıpkı gerçek perdedeki gibi.
+[çömlek, origami, yapı blokları hızlı geçiş] Bir de çömlek çarkı, kâğıt uçak ve yapı blokları var.
+[el takibi notu: kamera görüntüsü cihazda] El takibi telefonunda çalışır, görüntün hiçbir yere gitmez.
+[adres ekranda] Hepsi ücretsiz: ar-maker-lab nokta vercel nokta app.
+[ebruya dönüş] Sen ilk önce hangisini denerdin: ebru mu, kilim mi, Karagöz mü?

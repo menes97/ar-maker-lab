@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AR Pottery Studio</title>
+<style>
+  :root {
+    --bg1: #2a211c; --bg2: #120e0b;
+    --panel: rgba(20, 16, 13, 0.72); --line: rgba(255, 255, 255, 0.12);
+    --text: #f4ece4; --muted: #b9aa9b; --accent: #e08a4f; --accent2: #7fc4e8;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: radial-gradient(ellipse at 50% 30%, var(--bg1), var(--bg2)); color: var(--text); font: 14px/1.4 system-ui, "Segoe UI", sans-serif; }
+  #video { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); opacity: 0; transition: opacity .4s; }
+  #video.on { opacity: 1; }
+  #gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  .hud { position: fixed; left: 16px; top: 16px; max-width: min(420px, calc(100vw - 32px)); padding: 12px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; backdrop-filter: blur(8px); }
+  .hud h1 { margin: 0 0 4px; font-size: 16px; letter-spacing: .02em; }
+  .hud p { margin: 2px 0; color: var(--muted); font-size: 12.5px; }
+  #status { color: var(--text); font-weight: 600; }
+  .bar { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; padding: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; backdrop-filter: blur(8px); max-width: calc(100vw - 32px); }
+  .bar button { appearance: none; border: 1px solid var(--line); background: rgba(255,255,255,.06); color: var(--text); padding: 9px 13px; border-radius: 10px; font: inherit; cursor: pointer; }
+  .bar button:hover { background: rgba(255,255,255,.12); }
+  .bar button.primary { background: var(--accent); border-color: transparent; color: #1b120c; font-weight: 600; }
+  .cursor { position: fixed; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; border: 2px solid var(--accent2); pointer-events: none; display: none; box-shadow: 0 0 10px rgba(0,0,0,.4); transition: border-color .1s, background .1s; }
+  .cursor.pinch { border-color: #ffd36b; width: 30px; height: 30px; margin: -15px 0 0 -15px; }
+  .cursor.touch { background: rgba(224, 138, 79, .55); border-color: var(--accent); }
+  @media (max-width: 560px) { .hud p.long { display: none; } }
+</style>
+<script type="importmap">
+  { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+<video id="video" playsinline muted></video>
+<canvas id="gl"></canvas>
+<div class="cursor" id="cur0"></div>
+<div class="cursor" id="cur1"></div>
+<div class="cursor" id="cur2"></div>
+
+<div class="hud">
+  <h1><a href="../" data-home-link title="Tüm atölyeler" style="color:inherit;text-decoration:none;opacity:.7;margin-right:6px;font-weight:400">←</a>🏺 AR Pottery Studio — web prototipi</h1>
+  <p id="status">Hazır. Kamerayı aç ya da fareyle dene.</p>
+  <p class="long">✋ İşaret parmağı kile değince <b>içeri bastırır</b>. 🤏 Başparmak + işaret parmağını birleştirince (pinch) kil <b>parmağa doğru çekilir</b>; kilin tepesinde pinch yapıp yukarı çekersen <b>uzar</b>.</p>
+  <p class="long">🖱️ Fare: sol tık = bastır, sağ tık / Shift = çek.</p>
+</div>
+
+<div class="bar">
+  <button id="btnCam" class="primary">📷 Kamerayı aç</button>
+  <button id="btnSpin">⏸ Çarkı durdur</button>
+  <button id="btnUndo">↶ Geri al</button>
+  <button id="btnReset">⟲ Sıfırla</button>
+  <button id="btnShot">📸 Fotoğraf</button>
+</div>
+
+<script type="module">
+import * as THREE from "three";
+
+// ---------------------------------------------------------------------------
+// ARScene: renderer, kamera, ışık, çark
+// ---------------------------------------------------------------------------
+const canvas = document.getElementById("gl");
+const video = document.getElementById("video");
+const statusEl = document.getElementById("status");
+const setStatus = (t) => (statusEl.textContent = t);
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(38, 1, 0.05, 50);
+camera.position.set(0, 1.55, 4.3);
+const LOOK = new THREE.Vector3(0, 0.62, 0);
+camera.lookAt(LOOK);
+
+scene.add(new THREE.HemisphereLight(0xfff3e6, 0x3a2a20, 0.9));
+const key = new THREE.DirectionalLight(0xffffff, 2.2);
+key.position.set(2.5, 4, 3);
+key.castShadow = true;
+key.shadow.mapSize.set(1024, 1024);
+key.shadow.camera.left = -2; key.shadow.camera.right = 2; key.shadow.camera.top = 3; key.shadow.camera.bottom = -1;
+scene.add(key);
+const rim = new THREE.DirectionalLight(0xbfdfff, 0.8);
+rim.position.set(-3, 2, -2);
+scene.add(rim);
+
+// Çark (tezgah + dönen tabla)
+const wheelGroup = new THREE.Group();
+scene.add(wheelGroup);
+const base = new THREE.Mesh(
+  new THREE.CylinderGeometry(1.45, 1.6, 0.35, 64),
+  new THREE.MeshStandardMaterial({ color: 0x3b3f45, roughness: 0.6, metalness: 0.3 })
+);
+base.position.y = -0.3;
+base.receiveShadow = true;
+wheelGroup.add(base);
+
+function ringTexture() {
+  const c = document.createElement("canvas");
+  c.width = c.height = 512;
+  const g = c.getContext("2d");
+  g.fillStyle = "#8d8f92"; g.fillRect(0, 0, 512, 512);
+  for (let r = 20; r < 256; r += 14) {
+    g.strokeStyle = r % 28 ? "rgba(0,0,0,.18)" : "rgba(255,255,255,.12)";
+    g.lineWidth = 2; g.beginPath(); g.arc(256, 256, r, 0, Math.PI * 2); g.stroke();
+  }
+  // Dönüşü görünür kılmak için radyal işaretler
+  g.strokeStyle = "rgba(30,30,30,.55)"; g.lineWidth = 6;
+  for (let k = 0; k < 4; k++) {
+    const a = (k / 4) * Math.PI * 2;
+    g.beginPath(); g.moveTo(256 + Math.cos(a) * 120, 256 + Math.sin(a) * 120); g.lineTo(256 + Math.cos(a) * 250, 256 + Math.sin(a) * 250); g.stroke();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const plate = new THREE.Mesh(
+  new THREE.CylinderGeometry(1.2, 1.2, 0.1, 96),
+  [
+    new THREE.MeshStandardMaterial({ color: 0x777a7e, roughness: 0.4, metalness: 0.6 }),
+    new THREE.MeshStandardMaterial({ map: ringTexture(), roughness: 0.45, metalness: 0.5 }),
+    new THREE.MeshStandardMaterial({ color: 0x555555 }),
+  ]
+);
+plate.position.y = -0.05;
+plate.receiveShadow = true;
+wheelGroup.add(plate);
+
+// ---------------------------------------------------------------------------
+// ClayMeshController: yükseklik boyunca yarıçap profiliyle tanımlanan kil
+// ---------------------------------------------------------------------------
+const ROWS = 72, SEG = 96;
+const MIN_R = 0.07, MAX_R = 1.08, MIN_H = 0.45, MAX_H = 2.1;
+const clay = {
+  r: new Float32Array(ROWS),
+  H: 1.0,
+  initial() {
+    this.H = 1.0;
+    for (let i = 0; i < ROWS; i++) {
+      const t = i / (ROWS - 1);
+      this.r[i] = 0.5 - 0.04 * t + 0.03 * Math.sin(t * Math.PI); // hafif yuvarlak kil topağı
+    }
+  },
+  rowY(i) { return (i / (ROWS - 1)) * this.H; },
+  radiusAt(y) {
+    const f = THREE.MathUtils.clamp(y / this.H, 0, 1) * (ROWS - 1);
+    const i = Math.floor(f), j = Math.min(i + 1, ROWS - 1), k = f - i;
+    return this.r[i] * (1 - k) + this.r[j] * k;
+  },
+  volume() {
+    let v = 0; const dy = this.H / (ROWS - 1);
+    for (let i = 0; i < ROWS - 1; i++) v += Math.PI * ((this.r[i] ** 2 + this.r[i + 1] ** 2) / 2) * dy;
+    return v;
+  },
+};
+clay.initial();
+
+function clayTexture() {
+  const c = document.createElement("canvas");
+  c.width = 1024; c.height = 512;
+  const g = c.getContext("2d");
+  g.fillStyle = "#b5714a"; g.fillRect(0, 0, 1024, 512);
+  // Çevirme halkaları (yatay)
+  for (let y = 0; y < 512; y += 3) {
+    g.fillStyle = `rgba(${Math.random() < 0.5 ? "60,30,15" : "255,220,190"},${Math.random() * 0.08})`;
+    g.fillRect(0, y, 1024, 2);
+  }
+  // Islak lekeler / parmak izleri (dönüşü gösterir)
+  for (let n = 0; n < 140; n++) {
+    const x = Math.random() * 1024, y = Math.random() * 512, w = 20 + Math.random() * 90;
+    g.fillStyle = `rgba(${Math.random() < 0.5 ? "80,40,20" : "240,200,170"},${0.05 + Math.random() * 0.08})`;
+    g.beginPath(); g.ellipse(x, y, w, 3 + Math.random() * 6, 0, 0, Math.PI * 2); g.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = THREE.RepeatWrapping;
+  return t;
+}
+
+const sideVerts = ROWS * (SEG + 1);
+const capVerts = 1 + (SEG + 1);
+const geo = new THREE.BufferGeometry();
+const pos = new Float32Array((sideVerts + capVerts) * 3);
+const nor = new Float32Array((sideVerts + capVerts) * 3);
+const uv = new Float32Array((sideVerts + capVerts) * 2);
+const idx = [];
+for (let i = 0; i < ROWS - 1; i++)
+  for (let j = 0; j < SEG; j++) {
+    const a = i * (SEG + 1) + j, b = a + SEG + 1;
+    idx.push(a, b, a + 1, b, b + 1, a + 1);
+  }
+const capC = sideVerts;
+for (let j = 0; j < SEG; j++) idx.push(capC, capC + 2 + j, capC + 1 + j);
+for (let i = 0; i < ROWS; i++)
+  for (let j = 0; j <= SEG; j++) {
+    const v = i * (SEG + 1) + j;
+    uv[v * 2] = (j / SEG) * 2; uv[v * 2 + 1] = i / (ROWS - 1);
+  }
+for (let j = 0; j <= SEG; j++) {
+  const a = (j / SEG) * Math.PI * 2;
+  uv[(capC + 1 + j) * 2] = 0.5 + Math.cos(a) * 0.5; uv[(capC + 1 + j) * 2 + 1] = 0.5 + Math.sin(a) * 0.5;
+}
+uv[capC * 2] = 0.5; uv[capC * 2 + 1] = 0.5;
+geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+geo.setAttribute("normal", new THREE.BufferAttribute(nor, 3));
+geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+geo.setIndex(idx);
+
+const COS = [], SIN = [];
+for (let j = 0; j <= SEG; j++) { const a = (j / SEG) * Math.PI * 2; COS.push(Math.cos(a)); SIN.push(Math.sin(a)); }
+
+function rebuildClayMesh() {
+  const dy = clay.H / (ROWS - 1);
+  for (let i = 0; i < ROWS; i++) {
+    const r = clay.r[i], y = clay.rowY(i);
+    const drdy = (clay.r[Math.min(i + 1, ROWS - 1)] - clay.r[Math.max(i - 1, 0)]) / (dy * (i === 0 || i === ROWS - 1 ? 1 : 2));
+    const inv = 1 / Math.hypot(1, drdy);
+    for (let j = 0; j <= SEG; j++) {
+      const v = (i * (SEG + 1) + j) * 3;
+      pos[v] = r * COS[j]; pos[v + 1] = y; pos[v + 2] = r * SIN[j];
+      nor[v] = COS[j] * inv; nor[v + 1] = -drdy * inv; nor[v + 2] = SIN[j] * inv;
+    }
+  }
+  const topR = clay.r[ROWS - 1];
+  pos[capC * 3 + 1] = clay.H; pos[capC * 3] = 0; pos[capC * 3 + 2] = 0;
+  nor[capC * 3 + 1] = 1;
+  for (let j = 0; j <= SEG; j++) {
+    const v = (capC + 1 + j) * 3;
+    pos[v] = topR * COS[j]; pos[v + 1] = clay.H; pos[v + 2] = topR * SIN[j];
+    nor[v] = 0; nor[v + 1] = 1; nor[v + 2] = 0;
+  }
+  geo.attributes.position.needsUpdate = true;
+  geo.attributes.normal.needsUpdate = true;
+  geo.computeBoundingSphere();
+}
+rebuildClayMesh();
+
+const clayMesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: clayTexture(), roughness: 0.55, metalness: 0.0 }));
+clayMesh.castShadow = true;
+clayMesh.receiveShadow = true;
+wheelGroup.add(clayMesh);
+
+// ---------------------------------------------------------------------------
+// InteractionMapper: ekran noktası -> çark eksenini içeren düzlemde (yükseklik, eksene uzaklık)
+// ---------------------------------------------------------------------------
+const raycaster = new THREE.Raycaster();
+const ndc = new THREE.Vector2();
+const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0); // eksenden geçen, kameraya bakan düzlem
+const hit = new THREE.Vector3();
+function screenToClay(sx, sy) {
+  const rect = canvas.getBoundingClientRect();
+  ndc.set(((sx - rect.left) / rect.width) * 2 - 1, -((sy - rect.top) / rect.height) * 2 + 1);
+  raycaster.setFromCamera(ndc, camera);
+  if (!raycaster.ray.intersectPlane(plane, hit)) return null;
+  return { y: hit.y, dist: Math.abs(hit.x) };
+}
+
+const state = { spinTarget: 1, spin: 1, undo: [], strokeActive: false, idleTime: 1 };
+const SIGMA = 0.075;      // parmak temasının yükseklikteki etki genişliği
+const PUSH_RATE = 7.0;    // bastırma hızı
+const PULL_RATE = 4.5;    // çekme hızı
+
+function pushUndo() {
+  state.undo.push({ r: clay.r.slice(), H: clay.H });
+  if (state.undo.length > 30) state.undo.shift();
+}
+
+/** Bir aracı (parmak) kile uygula. Dönerse temas var demektir. */
+function applyTool(tool, dt) {
+  const p = screenToClay(tool.x, tool.y);
+  if (!p) return false;
+  const spin = state.spin;
+  if (spin < 0.05) return false; // çark durunca kil şekillenmez
+  const rate = dt * spin;
+
+  // Tepede pinch + yukarı = boy uzatma (hacmi kabaca koru)
+  // (yalnız parmak tepe hizasının üstünde ve ağız çapının içindeyken; yanda pinch = genişletme)
+  if (tool.pinch && p.y > clay.H - 0.03 && p.y < clay.H + 0.3 && p.dist < clay.r[ROWS - 1] * 0.85) {
+    const newH = THREE.MathUtils.clamp(clay.H + (p.y - clay.H) * 3 * rate, MIN_H, MAX_H);
+    if (Math.abs(newH - clay.H) > 1e-5) {
+      const s = Math.sqrt(clay.H / newH);
+      for (let i = 0; i < ROWS; i++) clay.r[i] = THREE.MathUtils.clamp(clay.r[i] * s, MIN_R, MAX_R);
+      clay.H = newH;
+    }
+    return true;
+  }
+
+  if (p.y < -0.02 || p.y > clay.H + 0.04) return false;
+  const surf = clay.radiusAt(p.y);
+  let touched = false;
+  for (let i = 0; i < ROWS; i++) {
+    const dyw = clay.rowY(i) - p.y;
+    const w = Math.exp(-(dyw * dyw) / (2 * SIGMA * SIGMA));
+    if (w < 0.01) continue;
+    if (tool.pinch) {
+      // parmağa doğru çek (yalnız yüzeye yakınken)
+      if (Math.abs(p.dist - surf) < 0.35) {
+        const target = THREE.MathUtils.clamp(p.dist, MIN_R, MAX_R);
+        clay.r[i] += (target - clay.r[i]) * Math.min(1, PULL_RATE * w * rate);
+        touched = true;
+      }
+    } else if (p.dist < surf + 0.015) {
+      // içeri bastır
+      const target = Math.max(p.dist, MIN_R);
+      if (clay.r[i] > target) {
+        clay.r[i] -= (clay.r[i] - target) * Math.min(1, PUSH_RATE * w * rate);
+        touched = true;
+      }
+    }
+  }
+  return touched;
+}
+
+function smoothProfile(dt) {
+  const a = Math.min(0.5, 6 * dt * state.spin);
+  if (a <= 0) return;
+  const tmp = clay.r.slice();
+  for (let i = 1; i < ROWS - 1; i++) clay.r[i] = tmp[i] + a * 0.25 * (tmp[i - 1] + tmp[i + 1] - 2 * tmp[i]);
+}
+
+// ---------------------------------------------------------------------------
+// HandInput: MediaPipe Hand Landmarker (webcam) + fare yedeği
+// ---------------------------------------------------------------------------
+const cursors = [0, 1, 2].map((i) => document.getElementById("cur" + i));
+const hands = [null, null]; // {x, y, pinch}
+const mouse = { down: false, x: 0, y: 0, pinch: false };
+let landmarker = null, camOn = false, lastVideoTime = -1;
+
+canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+canvas.addEventListener("pointerdown", (e) => {
+  mouse.down = true; mouse.x = e.clientX; mouse.y = e.clientY;
+  mouse.pinch = e.button === 2 || e.shiftKey;
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener("pointermove", (e) => { mouse.x = e.clientX; mouse.y = e.clientY; if (mouse.down) mouse.pinch = mouse.pinch || e.shiftKey; });
+const up = () => (mouse.down = false);
+canvas.addEventListener("pointerup", up);
+canvas.addEventListener("pointercancel", up);
+
+async function loadLandmarker() {
+  setStatus("El takibi modeli yükleniyor…");
+  const { FilesetResolver, HandLandmarker } = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs");
+  const files = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
+  const opts = (delegate) => ({
+    baseOptions: {
+      modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+      delegate,
+    },
+    runningMode: "VIDEO",
+    numHands: 2,
+    minHandDetectionConfidence: 0.6,
+    minTrackingConfidence: 0.5,
+  });
+  try { return await HandLandmarker.createFromOptions(files, opts("GPU")); }
+  catch { return await HandLandmarker.createFromOptions(files, opts("CPU")); }
+}
+
+async function toggleCamera() {
+  const btn = document.getElementById("btnCam");
+  if (camOn) {
+    video.srcObject?.getTracks().forEach((t) => t.stop());
+    video.srcObject = null; video.classList.remove("on"); camOn = false;
+    hands[0] = hands[1] = null;
+    btn.textContent = "📷 Kamerayı aç"; setStatus("Kamera kapalı. Fareyle devam edebilirsin.");
+    return;
+  }
+  try {
+    btn.disabled = true;
+    if (!landmarker) landmarker = await loadLandmarker();
+    setStatus("Kamera açılıyor…");
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" }, audio: false });
+    video.srcObject = stream;
+    await video.play();
+    video.classList.add("on"); camOn = true;
+    btn.textContent = "📷 Kamerayı kapat";
+    setStatus("Elini kameraya göster; işaret parmağınla kile dokun.");
+  } catch (err) {
+    console.error(err);
+    setStatus("Kamera/el takibi başlatılamadı: " + (err?.message || err) + " — fareyle deneyebilirsin.");
+  } finally { btn.disabled = false; }
+}
+
+/** Video koordinatını (0..1) ekran pikseline çevir: object-fit: cover + ayna. */
+function videoToScreen(nx, ny) {
+  const W = innerWidth, H = innerHeight, vw = video.videoWidth || 1280, vh = video.videoHeight || 720;
+  const s = Math.max(W / vw, H / vh), dw = vw * s, dh = vh * s;
+  return { x: (W - dw) / 2 + (1 - nx) * dw, y: (H - dh) / 2 + ny * dh };
+}
+
+// --- Kararlı el işaretçisi -------------------------------------------------
+// One Euro filtresi: el yavaşken titreşimi güçlü biçimde bastırır,
+// hızlı hareket ederken gecikmeyi azaltır.
+class OneEuro {
+  constructor(minCutoff = 1.0, beta = 0.004, dCutoff = 1.0) { Object.assign(this, { minCutoff, beta, dCutoff, x: null, dx: 0, t: 0 }); }
+  static alpha(cutoff, dt) { const tau = 1 / (2 * Math.PI * cutoff); return 1 / (1 + tau / dt); }
+  filter(x, t) {
+    if (this.x === null) { this.x = x; this.t = t; return x; }
+    const dt = Math.max(1e-3, t - this.t); this.t = t;
+    this.dx += OneEuro.alpha(this.dCutoff, dt) * ((x - this.x) / dt - this.dx);
+    const cutoff = this.minCutoff + this.beta * Math.abs(this.dx);
+    this.x += OneEuro.alpha(cutoff, dt) * (x - this.x);
+    return this.x;
+  }
+}
+const STABILITY = { minCutoff: 0.5, beta: 0.004 }; // minCutoff küçüldükçe daha durgun, beta büyüdükçe daha çevik
+const newHandFilter = () => ({ x: new OneEuro(STABILITY.minCutoff, STABILITY.beta), y: new OneEuro(STABILITY.minCutoff, STABILITY.beta), pinchVotes: 0, raw: null });
+const handFilters = [newHandFilter(), newHandFilter()];
+
+function readHands() {
+  if (!camOn || !landmarker || video.readyState < 2 || video.currentTime === lastVideoTime) return;
+  lastVideoTime = video.currentTime;
+  let lms = (landmarker.detectForVideo(video, performance.now()).landmarks || []).slice(0, 2);
+  // İki el varsa sıra kareden kareye değişebilir: önceki konumlara en yakın eşleşmeyi koru
+  if (lms.length === 2 && handFilters[0].raw && handFilters[1].raw) {
+    const d = (lm, f) => Math.hypot(lm[0].x - f.raw.x, lm[0].y - f.raw.y);
+    if (d(lms[0], handFilters[1]) + d(lms[1], handFilters[0]) < d(lms[0], handFilters[0]) + d(lms[1], handFilters[1])) lms = [lms[1], lms[0]];
+  }
+  const t = performance.now() / 1000;
+  for (let h = 0; h < 2; h++) {
+    const lm = lms[h];
+    if (!lm) { hands[h] = null; handFilters[h] = newHandFilter(); continue; }
+    const f = handFilters[h];
+    f.raw = { x: lm[0].x, y: lm[0].y };
+    const thumb = lm[4], index = lm[8], knuckle = lm[5];
+    // Sabit referans noktası: iki parmak ucu + işaret parmağı kökü.
+    // Pinch açılıp kapanırken iki uç simetrik yaklaştığı için nokta zıplamaz.
+    const nx = thumb.x * 0.35 + index.x * 0.35 + knuckle.x * 0.3;
+    const ny = thumb.y * 0.35 + index.y * 0.35 + knuckle.y * 0.3;
+    const sp = videoToScreen(nx, ny);
+    const x = f.x.filter(sp.x, t), y = f.y.filter(sp.y, t);
+    // Pinch: histerezis + durum değişikliği için 2 kare onay (titrek tıklamaları önler)
+    const size = Math.hypot(lm[0].x - lm[9].x, lm[0].y - lm[9].y) || 0.1;
+    const ratio = Math.hypot(thumb.x - index.x, thumb.y - index.y) / size;
+    const was = !!hands[h]?.pinch;
+    const want = was ? ratio < 0.45 : ratio < 0.32;
+    f.pinchVotes = want !== was ? f.pinchVotes + 1 : 0;
+    const pinch = f.pinchVotes >= 2 ? want : was;
+    if (f.pinchVotes >= 2) f.pinchVotes = 0;
+    hands[h] = { x, y, pinch };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Kontroller
+// ---------------------------------------------------------------------------
+document.getElementById("btnCam").onclick = toggleCamera;
+document.getElementById("btnSpin").onclick = (e) => {
+  state.spinTarget = state.spinTarget ? 0 : 1;
+  e.target.textContent = state.spinTarget ? "⏸ Çarkı durdur" : "▶ Çarkı başlat";
+};
+document.getElementById("btnUndo").onclick = () => {
+  const s = state.undo.pop();
+  if (!s) return setStatus("Geri alınacak hareket yok.");
+  clay.r.set(s.r); clay.H = s.H; rebuildClayMesh(); setStatus("Son hareket geri alındı.");
+};
+document.getElementById("btnReset").onclick = () => { pushUndo(); clay.initial(); rebuildClayMesh(); setStatus("Kil sıfırlandı."); };
+document.getElementById("btnShot").onclick = () => {
+  const out = document.createElement("canvas");
+  out.width = canvas.width; out.height = canvas.height;
+  const g = out.getContext("2d");
+  if (camOn) {
+    const vw = video.videoWidth, vh = video.videoHeight, s = Math.max(out.width / vw, out.height / vh);
+    g.save(); g.translate(out.width, 0); g.scale(-1, 1);
+    g.drawImage(video, (out.width - vw * s) / 2, (out.height - vh * s) / 2, vw * s, vh * s);
+    g.restore();
+  } else {
+    const grd = g.createRadialGradient(out.width / 2, out.height * 0.3, 10, out.width / 2, out.height * 0.3, out.width);
+    grd.addColorStop(0, "#2a211c"); grd.addColorStop(1, "#120e0b");
+    g.fillStyle = grd; g.fillRect(0, 0, out.width, out.height);
+  }
+  g.drawImage(canvas, 0, 0);
+  const a = document.createElement("a");
+  a.download = `comlek-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.png`;
+  a.href = out.toDataURL("image/png"); a.click();
+  setStatus("Fotoğraf kaydedildi.");
+};
+addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") document.getElementById("btnUndo").click();
+});
+
+// ---------------------------------------------------------------------------
+// Döngü
+// ---------------------------------------------------------------------------
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  // Dar ekranda kili kadraja sığdır
+  camera.position.z = w / h < 0.8 ? 6.2 : 4.3;
+  camera.lookAt(LOOK);
+  camera.updateProjectionMatrix();
+}
+addEventListener("resize", resize);
+resize();
+
+const clock = new THREE.Clock();
+function frame() {
+  const dt = Math.min(clock.getDelta(), 0.1);
+  readHands();
+
+  state.spin += (state.spinTarget - state.spin) * Math.min(1, dt * 2.5);
+  const omega = state.spin * Math.PI * 2 * 1.1;
+  plate.rotation.y += omega * dt;
+  clayMesh.rotation.y += omega * dt;
+
+  const tools = [];
+  hands.forEach((h) => h && tools.push(h));
+  if (mouse.down) tools.push(mouse);
+
+  let anyTouch = false;
+  const touches = tools.map(() => false);
+  if (tools.length) {
+    if (!state.strokeActive && state.idleTime > 0.25) { pushUndo(); state.strokeActive = true; }
+    tools.forEach((t, i) => (touches[i] = applyTool(t, dt)));
+    anyTouch = touches.some(Boolean);
+  }
+  if (anyTouch) { state.idleTime = 0; smoothProfile(dt); rebuildClayMesh(); }
+  else { state.idleTime += dt; if (state.idleTime > 0.25) state.strokeActive = false; }
+
+  // Gereksiz geri-al kayıtlarını at (dokunmadan biten vuruş)
+  if (!state.strokeActive && state.undo.length) {
+    const last = state.undo[state.undo.length - 1];
+    if (last.H === clay.H && last.r.every((v, i) => v === clay.r[i])) state.undo.pop();
+  }
+
+  cursors.forEach((c, i) => {
+    const t = tools[i];
+    if (!t) { c.style.display = "none"; return; }
+    c.style.display = "block"; c.style.left = t.x + "px"; c.style.top = t.y + "px";
+    c.classList.toggle("pinch", !!t.pinch);
+    c.classList.toggle("touch", touches[i]);
+  });
+
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// Test/hata ayıklama için
+window.__pottery = { clay, state, applyTool, rebuildClayMesh, screenToClay, camera, THREE };
+</script>
+</body>
+</html>
