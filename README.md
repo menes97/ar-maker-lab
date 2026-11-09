@@ -3,6 +3,7 @@
 Kamerana elini göster, havada üret. Tarayıcıda açılan yedi el takibi atölyesi; kurulum yok.
 
 **Canlı:** https://ar-maker-lab.vercel.app
+**Öğretmen rehberi:** https://ar-maker-lab.vercel.app/ogretmen/ (kurulum, 40 dakikalık ders akışları, gizlilik özeti)
 
 | Atölye | Ne yaparsın |
 |---|---|

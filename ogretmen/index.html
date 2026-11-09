@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AR Maker Lab — Öğretmen Rehberi</title>
+<meta name="description" content="AR Maker Lab atölyelerini derste kullanmak için kurulum, 40 dakikalık ders akışları ve gizlilik özeti." />
+<meta name="theme-color" content="#14110f" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✋</text></svg>" />
+<style>
+  :root { --bg: #14110f; --card: #211b16; --line: rgba(255,240,220,.11); --text: #f6efe6; --muted: #b8aa9a; --accent: #e3a04a; --ok: #7cc68d; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: radial-gradient(ellipse at 50% -10%, #3a2c22 0%, #1f1915 35%, var(--bg) 75%); color: var(--text); font: 16px/1.6 system-ui, "Segoe UI", sans-serif; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 32px 16px 56px; }
+  a { color: var(--accent); }
+  .back { display: inline-block; margin-bottom: 18px; text-decoration: none; color: var(--muted); padding: 6px 0; }
+  h1 { font-size: clamp(28px, 5vw, 40px); margin: 0 0 8px; line-height: 1.2; }
+  .lead { color: var(--muted); font-size: 17px; margin: 0 0 24px; }
+  h2 { font-size: 22px; margin: 40px 0 12px; padding-top: 8px; border-top: 1px solid var(--line); }
+  h3 { font-size: 18px; margin: 0 0 6px; }
+  .toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 8px; padding: 0; list-style: none; }
+  .toc a { display: inline-block; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; text-decoration: none; color: var(--text); background: rgba(255,255,255,.03); font-size: 14px; }
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin: 18px 0 0; }
+  .fact { padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+  .fact b { display: block; font-size: 15px; }
+  .fact span { color: var(--muted); font-size: 14px; }
+  ol, ul { padding-left: 22px; }
+  li { margin: 4px 0; }
+  .card { border: 1px solid var(--line); border-radius: 14px; background: var(--card); padding: 18px 18px 8px; margin: 14px 0; }
+  .card .meta { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 10px; }
+  .card .meta span { font-size: 13px; padding: 2px 9px; border-radius: 999px; background: rgba(255,255,255,.07); color: var(--muted); }
+  table.flow { width: 100%; border-collapse: collapse; margin: 6px 0 12px; font-size: 15px; }
+  table.flow td { padding: 6px 8px; border-top: 1px solid var(--line); vertical-align: top; }
+  table.flow td:first-child { white-space: nowrap; color: var(--accent); font-weight: 600; width: 1%; }
+  .q { color: var(--muted); font-size: 15px; margin: 6px 0 12px; }
+  .note { border-left: 3px solid var(--accent); padding: 10px 14px; background: rgba(227,160,74,.08); border-radius: 0 10px 10px 0; margin: 14px 0; }
+  .ok { border-left-color: var(--ok); background: rgba(124,198,141,.08); }
+  .go { display: inline-block; margin: 2px 0 10px; font-weight: 600; text-decoration: none; }
+  footer { margin-top: 48px; color: var(--muted); font-size: 14px; text-align: center; }
+  @media print {
+    body { background: #fff; color: #111; font-size: 12pt; }
+    .back, .toc, .go { display: none; }
+    .card, .fact { background: #fff; border-color: #ccc; break-inside: avoid; }
+    a { color: #111; }
+    .lead, .q, .fact span, .card .meta span, footer { color: #444; }
+    table.flow td:first-child { color: #111; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="../">← AR Maker Lab</a>
+  <h1>Öğretmen Rehberi</h1>
+  <p class="lead">Yedi atölyeyi derste kullanmak için ihtiyacınız olan her şey: kurulum, 40 dakikalık ders akışları ve gizlilik özeti. Sayfayı yazdırabilirsiniz.</p>
+
+  <ul class="toc">
+    <li><a href="#kurulum">Kurulum</a></li>
+    <li><a href="#gizlilik">Gizlilik</a></li>
+    <li><a href="#akis">Ders akışları</a></li>
+    <li><a href="#sorun">Sorun çözme</a></li>
+    <li><a href="#geri">Geri bildirim</a></li>
+  </ul>
+
+  <div class="facts">
+    <div class="fact"><b>Ücretsiz, hesap yok</b><span>Bağlantıyı açmak yeterli; kayıt, giriş, kurulum yok.</span></div>
+    <div class="fact"><b>Kamera görüntüsü cihazda kalır</b><span>El takibi tarayıcının içinde çalışır; görüntü hiçbir sunucuya gitmez.</span></div>
+    <div class="fact"><b>Kamera şart değil</b><span>Fare, dokunmatik ekran ve akıllı tahtayla da kullanılır.</span></div>
+    <div class="fact"><b>Telefon, tablet, bilgisayar</b><span>Güncel Chrome, Edge veya Safari.</span></div>
+  </div>
+
+  <h2 id="kurulum">Kurulum (5 dakika)</h2>
+  <ol>
+    <li><b>Adresi açın:</b> <a href="https://ar-maker-lab.vercel.app">ar-maker-lab.vercel.app</a> — atölyeyi seçin.</li>
+    <li><b>📷 Kamera</b> düğmesine basın, tarayıcı izin sorunca <b>İzin ver</b> deyin. El takibi modeli ilk açılışta birkaç saniyede iner.</li>
+    <li><b>Işık ve mesafe:</b> Yüz değil <b>el</b> aydınlık olmalı; pencere arkada kalmasın. Kameradan yaklaşık 40–80 cm uzakta, elin tamamı (bilek dahil) görüntüde olsun.</li>
+    <li><b>Hareket:</b> Başparmak ile işaret parmağını birleştirmek (<b>pinch</b>) = tut / dokun. Ekrandaki düğmelere pinch ile de basılabilir.</li>
+    <li><b>Kamera yoksa:</b> Fareyle basılı tutup sürükleyin; dokunmatik ekranda parmakla çizin.</li>
+  </ol>
+  <div class="note"><b>Okul ağı uyarısı:</b> El takibi iki adresten dosya indirir: <code>cdn.jsdelivr.net</code> ve <code>storage.googleapis.com</code>. Okul internet filtresi bunları engelliyorsa kamera modu açılmaz (fare/dokunmatik yine çalışır). Bilişim teknolojileri öğretmeninizden bu iki adresin açılmasını isteyebilirsiniz.</div>
+  <div class="note"><b>Akıllı tahta:</b> Tahtanın kamerası varsa sınıf önünde bir öğrenci elle kullanır, diğerleri izler. Kamera yoksa tahtaya dokunarak aynı atölye kullanılır. Telefon ekranında araç ve renkler altta yana kayan şeritlerdedir.</div>
+
+  <h2 id="gizlilik">Gizlilik özeti (veliler ve idare için)</h2>
+  <ul>
+    <li>Kamera görüntüsü <b>yalnızca öğrencinin cihazında</b> işlenir; kaydedilmez, hiçbir sunucuya gönderilmez.</li>
+    <li>Hesap, ad, e-posta, konum <b>istenmez</b>; uygulama öğrencinin yaptıklarını kaydetmez, analiz/izleme aracı kullanmaz. (Site, her web sitesi gibi barındırma sağlayıcısının teknik erişim kayıtlarından geçer.)</li>
+    <li>Öğrencinin ürettiği resim/video yalnızca <b>“indir” düğmesine basılırsa</b> o cihaza kaydedilir.</li>
+    <li>Karagöz atölyesindeki <b>video kaydı</b> yalnızca perdeyi kaydeder (kamera görüntüsü videoya girmez); mikrofon kutusu işaretlenmedikçe ses alınmaz.</li>
+    <li>Ders sırasında öğrencilerin yüzlerini ayrıca fotoğraflayıp paylaşacaksanız, okulunuzun veli izni kurallarına uyun.</li>
+    <li>Kaynak kod açıktır: <a href="https://github.com/menes97/ar-maker-lab">github.com/menes97/ar-maker-lab</a></li>
+  </ul>
+  <div class="note ok">Kısaca: <b>kamera açılsa bile görüntü cihazdan çıkmaz.</b></div>
+
+  <h2 id="akis">Ders akışları (40 dakika)</h2>
+  <p class="q">Sınıf düzeyleri öneridir; kendi programınıza ve öğrencilerinize göre uyarlayın. Her akış aynı iskeleti izler: merak uyandır (5) → göster (5) → uygula (20) → paylaş ve konuş (10).</p>
+
+  <div class="card">
+    <h3>🎨 Ebru Atölyesi</h3>
+    <div class="meta"><span>Görsel sanatlar</span><span>Geleneksel el sanatları</span><span>Öneri: 3. sınıf ve üstü</span></div>
+    <table class="flow">
+      <tr><td>0–5</td><td>Gerçek bir ebru örneği gösterin: “Bu desen suyun üstünde nasıl oluşur?”</td></tr>
+      <tr><td>5–10</td><td>Tahtada fırçayla boya serpin, tarakla tarayın, lale bizi ile bir lale açın.</td></tr>
+      <tr><td>10–30</td><td>Öğrenciler önce battal zemin (3 renk serpme), sonra kendi desenlerini yapar. Hedef: en az bir lale.</td></tr>
+      <tr><td>30–40</td><td>“Kâğıda al” ile kaydedip galeri yapın. Konuşun: Hangi alet boyayı nasıl hareket ettirdi?</td></tr>
+    </table>
+    <p class="q">Sorular: Boyalar neden karışmıyor? Gerçek ebruda tekne, kitre ve öd ne işe yarar?</p>
+    <a class="go" href="../ar-ebru-web/">Atölyeyi aç →</a>
+  </div>
+
+  <div class="card">
+    <h3>🎭 Karagöz Sahnesi</h3>
+    <div class="meta"><span>Türkçe / drama</span><span>Görsel sanatlar</span><span>Öneri: 4. sınıf ve üstü</span></div>
+    <table class="flow">
+      <tr><td>0–5</td><td>“Perde gazeli”nden bir bölüm okuyun ya da kısa bir Karagöz–Hacivat atışması anlatın.</td></tr>
+      <tr><td>5–10</td><td>İki elle iki tasviri oynatın; eli uzaklaştırınca gölgenin bulanıklaştığını gösterin.</td></tr>
+      <tr><td>10–30</td><td>İkişerli gruplar 1 dakikalık bir sahne yazar ve prova eder (biri Karagöz, biri Hacivat).</td></tr>
+      <tr><td>30–40</td><td>Gruplar sahnesini oynar; isteyen “Kaydet” ile perdeyi videoya alır.</td></tr>
+    </table>
+    <p class="q">Sorular: Gölge neden bulanıklaşıyor? (ışık ve uzaklık) Karagöz ile Hacivat nasıl konuşur, neden anlaşamaz?</p>
+    <a class="go" href="../ar-karagoz-web/">Atölyeyi aç →</a>
+  </div>
+
+  <div class="card">
+    <h3>🔷 Çini Atölyesi</h3>
+    <div class="meta"><span>Görsel sanatlar</span><span>Matematik: simetri, döndürme</span><span>Öneri: 4. sınıf ve üstü</span></div>
+    <table class="flow">
+      <tr><td>0–5</td><td>Bir cami ya da saray çinisi gösterin: “Bu desende kaç tekrar var?”</td></tr>
+      <tr><td>5–10</td><td>Simetriyi 4’lü, 6’lı, 8’li yapıp tek bir çizginin nasıl çoğaldığını gösterin.</td></tr>
+      <tr><td>10–30</td><td>Öğrenciler bir şablonu (rozet, lale vazo, yıldız) İznik renkleriyle boyar ya da kendi karosunu tasarlar.</td></tr>
+      <tr><td>30–40</td><td>“Pano” görünümünde karonun duvarda nasıl tekrarlandığına bakın; “Sırla &amp; fırınla” ile kaydedin.</td></tr>
+    </table>
+    <p class="q">Sorular: 8’li simetride bir çizgi kaç kez tekrar eder? Ayna simetrisi ile dönme simetrisi arasındaki fark ne?</p>
+    <a class="go" href="../ar-cini-web/">Atölyeyi aç →</a>
+  </div>
+
+  <div class="card">
+    <h3>🧶 Kilim Tezgâhı</h3>
+    <div class="meta"><span>Geleneksel el sanatları</span><span>Matematik: örüntü, koordinat</span><span>Öneri: 3. sınıf ve üstü</span></div>
+    <table class="flow">
+      <tr><td>0–5</td><td>Bir kilimdeki motifleri (elibelinde, koçboynuzu, göz) bulun ve anlamlarını sorun.</td></tr>
+      <tr><td>5–10</td><td>Mekiği bir sıra boyunca geçirip kirkitle sıkıştırmayı gösterin.</td></tr>
+      <tr><td>10–30</td><td>“Desenli” modda bir motif seçip dokuyun; hızlı bitenler “Serbest” modda kendi motifini tasarlar.</td></tr>
+      <tr><td>30–40</td><td>“Kilimi bitir” ile saçaklı kilimi kaydedin; desenleri karşılaştırın.</td></tr>
+    </table>
+    <p class="q">Sorular: Motif neden iki yana simetrik? Bir sırada kaç ilmek var, tüm kilimde kaç ilmek olur?</p>
+    <a class="go" href="../ar-kilim-web/">Atölyeyi aç →</a>
+  </div>
+
+  <div class="card">
+    <h3>🏺 Çömlek Çarkı</h3>
+    <div class="meta"><span>Görsel sanatlar</span><span>Fen / teknoloji: dönme</span><span>Öneri: 2. sınıf ve üstü</span></div>
+    <table class="flow">
+      <tr><td>0–10</td><td>Çark dönerken kili bastırıp çekmeyi gösterin; çark durunca neden şekil değişmediğini sorun.</td></tr>
+      <tr><td>10–30</td><td>Görev kartı: “Uzun boyunlu bir vazo”, “geniş bir kase”, “belli bir testi” yapın.</td></tr>
+      <tr><td>30–40</td><td>Fotoğrafları karşılaştırın: aynı silindirden ne kadar farklı biçim çıktı?</td></tr>
+    </table>
+    <a class="go" href="../ar-pottery-web/">Atölyeyi aç →</a>
+  </div>
+
+  <div class="card">
+    <h3>📄 Origami: Kâğıt Uçak</h3>
+    <div class="meta"><span>Matematik: geometri, açılar</span><span>Öneri: 2. sınıf ve üstü</span></div>
+    <table class="flow">
+      <tr><td>0–10</td><td>Ekranda adım adım katlayın; her katta oluşan şekli (üçgen, yamuk) adlandırın.</td></tr>
+      <tr><td>10–30</td><td>Öğrenciler ekranda katlar, sonra aynı adımlarla gerçek kâğıttan uçak yapar.</td></tr>
+      <tr><td>30–40</td><td>Sınıfta uçuş denemesi: Kanat açısı uçuşu nasıl etkiliyor?</td></tr>
+    </table>
+    <a class="go" href="../ar-origami-web/">Atölyeyi aç →</a>
+  </div>
+
+  <div class="card">
+    <h3>🧱 Yapı Blokları</h3>
+    <div class="meta"><span>Matematik: alan, hacim, simetri</span><span>Öneri: 1. sınıf ve üstü</span></div>
+    <table class="flow">
+      <tr><td>0–10</td><td>Parça koyma, üst üste dizme, boyama ve sahneyi döndürmeyi gösterin.</td></tr>
+      <tr><td>10–30</td><td>Görev: “Simetrik bir ev”, “en az 20 parçalık bir kule”, “okulumuzun bir köşesi”.</td></tr>
+      <tr><td>30–40</td><td>Fotoğrafla kaydedin; kaç parça kullanıldığını sayıp karşılaştırın.</td></tr>
+    </table>
+    <a class="go" href="../ar-brick-web/">Atölyeyi aç →</a>
+  </div>
+
+  <div class="note">El takibi aynı zamanda <b>ince motor</b> çalışmasıdır: pinch, yavaş sürükleme ve sabit tutma. Özel eğitim ve rehberlik derslerinde kısa, oyunlu alıştırmalar olarak denenebilir.</div>
+
+  <h2 id="sorun">Sorun çözme</h2>
+  <ul>
+    <li><b>Kamera açılmıyor:</b> Tarayıcının adres çubuğundaki kamera simgesinden izni açın; başka bir program (Zoom, Teams) kamerayı kullanıyorsa kapatın.</li>
+    <li><b>“Model yükleniyor” bitmiyor:</b> Okul ağı iki adresi engelliyor olabilir (yukarıdaki uyarıya bakın). Bu arada fare/dokunmatikle devam edin.</li>
+    <li><b>İşaretçi titriyor:</b> Işığı artırın, eli biraz yaklaştırın, arka planı sadeleştirin.</li>
+    <li><b>Pinch algılanmıyor:</b> Parmak uçlarını tam birleştirin; el kameraya yandan değil önden baksın.</li>
+    <li><b>Yavaş çalışıyor:</b> Diğer sekmeleri kapatın; Ebru’da çok fazla boya serpildiyse “Temizle” deyin.</li>
+  </ul>
+
+  <h2 id="geri">Geri bildirim</h2>
+  <p>Bu atölyeler öğretmen görüşleriyle gelişiyor. Derste denediyseniz, hangi atölyeyi, hangi sınıfta kullandığınızı ve neyin işe yarayıp neyin yaramadığını yazmanız çok değerli.</p>
+  <p><b>Bize ulaşın:</b> <a href="https://x.com/meneswithus">X: @meneswithus</a></p>
+
+  <footer>AR Maker Lab · Ücretsiz ve açık kaynak · Kamera görüntüsü cihazınızdan çıkmaz.</footer>
+</div>
+</body>
+</html>
