@@ -1,6 +1,6 @@
 # ✋ AR Maker Lab
 
-Kamerana elini göster, havada üret. Tarayıcıda açılan yedi el takibi atölyesi; kurulum yok.
+Kamerana elini göster, havada üret. Tarayıcıda açılan sekiz el takibi atölyesi; kurulum yok.
 
 **Canlı:** https://ar-maker-lab.vercel.app
 **Öğretmen rehberi:** https://ar-maker-lab.vercel.app/ogretmen/ (kurulum, 40 dakikalık ders akışları, gizlilik özeti)
@@ -14,6 +14,7 @@ Kamerana elini göster, havada üret. Tarayıcıda açılan yedi el takibi atöl
 | 🏺 Çömlek | Dönen kili parmağınla bastır, pinch ile çek. |
 | 📄 Origami | Kâğıt uçağı on adımda katla ve fırlat. |
 | 🧱 Yapı blokları | Parça koy, üst üste diz, boya, sil. |
+| 🚗 Elinle Sür | Elinle arabayı sür; renkli balonları topla, konilerden zıpla, kırmızı ışıkta dur. |
 
 ## Nasıl çalışır
 

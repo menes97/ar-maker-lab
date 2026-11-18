@@ -7,7 +7,7 @@ import path from "node:path";
 const BASE = process.env.BASE || "http://localhost:5180";
 const OUT = path.resolve("../mobil");
 const CHROME = "C:/Program Files/Google/Chrome/Application/chrome.exe";
-const PAGES = ["", "ar-ebru-web/", "ar-karagoz-web/", "ar-cini-web/", "ar-kilim-web/", "ar-pottery-web/", "ar-origami-web/", "ar-brick-web/"];
+const PAGES = ["", "ar-ebru-web/", "ar-karagoz-web/", "ar-cini-web/", "ar-kilim-web/", "ar-pottery-web/", "ar-origami-web/", "ar-brick-web/", "ar-araba-web/"];
 const sizes = (process.argv.slice(2).length ? process.argv.slice(2) : ["390x844", "360x740"]).map((s) => s.split("x").map(Number));
 fs.mkdirSync(OUT, { recursive: true });
 

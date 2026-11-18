@@ -1,0 +1,1097 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Elinle Sür</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27><text y=%27.9em%27 font-size=%2790%27>🚗</text></svg>" />
+<style>
+  :root { --panel: rgba(18, 20, 26, 0.78); --line: rgba(255,255,255,.16); --text: #f3f4f7; --muted: #c3c9d4; --accent: #f2b233; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #bfe6ff; color: var(--text); font: 15px/1.4 system-ui, "Segoe UI", sans-serif; -webkit-tap-highlight-color: transparent; }
+  .hidden, #side.hidden { display: none !important; }
+  #gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  /* Kamera görüntüsü: sahne tam ekran opak olduğu için küçük bir pencere olarak gösterilir */
+  #video { position: fixed; left: 14px; bottom: 14px; width: 132px; height: 99px; object-fit: cover; transform: scaleX(-1); border-radius: 12px; border: 2px solid rgba(255,255,255,.7); opacity: 0; pointer-events: none; transition: opacity .4s; z-index: 5; }
+  #video.on { opacity: .92; }
+  .panel { position: fixed; padding: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; backdrop-filter: blur(8px); z-index: 6; }
+  .hud { left: 16px; top: 16px; width: min(330px, calc(100vw - 32px)); padding: 10px 14px; }
+  .hud h1 { margin: 0 0 4px; font-size: 18px; }
+  .hud p { margin: 3px 0 0; color: var(--muted); font-size: 13px; }
+  .hud p#stat { color: var(--text); font-size: 17px; font-weight: 700; }
+  .side { right: 16px; top: 16px; display: flex; flex-direction: column; gap: 7px; }
+  .bar { left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; max-width: calc(100vw - 32px); }
+  button { border: 1px solid var(--line); background: rgba(255,255,255,.08); color: var(--text); padding: 10px 16px; border-radius: 14px; font: inherit; font-size: 17px; cursor: pointer; white-space: nowrap; }
+  button:hover { background: rgba(255,255,255,.16); }
+  button.on { background: var(--accent); color: #1c1606; border-color: transparent; font-weight: 700; }
+  .swatch { width: 34px; height: 34px; padding: 0; border-radius: 10px; border: 2px solid rgba(255,255,255,.3); }
+  .swatch.on { border-color: #fff; box-shadow: 0 0 0 3px rgba(255,255,255,.4); }
+  #side .group { display: flex; flex-wrap: nowrap; gap: 6px; justify-content: center; padding-top: 2px; }
+  .cursor { position: fixed; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 0 2px rgba(0,0,0,.35); pointer-events: none; display: none; z-index: 9; }
+  .cursor.pinch { border-color: var(--accent); background: rgba(242,178,51,.45); }
+
+  #banner { position: fixed; top: 16px; left: 370px; right: 16px; text-align: center; pointer-events: none; z-index: 7; }
+  #bannerText { display: inline-block; padding: 8px 24px; border-radius: 20px; font-size: clamp(20px, 3vw, 34px); font-weight: 800; color: #fff; box-shadow: 0 4px 16px rgba(0,0,0,.3); text-shadow: 0 1px 3px rgba(0,0,0,.4); transition: background .25s; }
+  #pop { position: fixed; left: 50%; top: 32%; transform: translateX(-50%); font-size: clamp(26px, 5vw, 46px); font-weight: 900; color: #fff; text-shadow: 0 2px 6px rgba(0,0,0,.55); pointer-events: none; opacity: 0; z-index: 7; white-space: nowrap; }
+  #pop.go { animation: pop .9s ease-out; }
+  @keyframes pop { 0% { opacity: 0; transform: translate(-50%, 12px) scale(.7); } 20% { opacity: 1; transform: translate(-50%, 0) scale(1.1); } 100% { opacity: 0; transform: translate(-50%, -40px) scale(1); } }
+  #toast { position: fixed; left: 50%; top: 96px; transform: translateX(-50%); max-width: min(560px, calc(100vw - 24px)); padding: 8px 14px; background: var(--panel); border-radius: 12px; font-size: 14px; text-align: center; pointer-events: none; opacity: 0; transition: opacity .3s; z-index: 7; }
+  #toast.on { opacity: 1; }
+
+  .card { position: fixed; left: 50%; top: 16%; transform: translateX(-50%); width: min(560px, calc(100vw - 24px)); padding: 18px 22px; text-align: center; background: var(--panel); border: 1px solid var(--line); border-radius: 26px; backdrop-filter: blur(8px); z-index: 8; }
+  .card h2 { margin: 0 0 6px; font-size: 36px; }
+  .card p { margin: 6px 0; color: var(--muted); }
+  .card .tips { font-size: 14px; line-height: 1.7; }
+  .big { font-size: 28px; padding: 14px 38px; border-radius: 20px; background: #43a047; color: #fff; font-weight: 800; border: 0; margin: 8px 4px 2px; }
+  .big:hover { background: #4caf50; }
+  .big.alt { background: #1e88e5; }
+  #endStars { font-size: 56px; letter-spacing: 6px; line-height: 1.1; }
+  #endMsg { font-size: 26px; font-weight: 800; color: #fff !important; }
+
+  @media (max-width: 1000px) {
+    .hud p.long { display: none; }
+    .side { top: auto; bottom: 84px; right: 50%; transform: translateX(50%); flex-direction: row; align-items: center; }
+    #banner { left: 16px; top: 76px; }
+  }
+  @media (max-width: 700px), (max-height: 500px) {
+    #banner { left: 8px !important; right: 8px !important; top: 66px !important; }
+    #bannerText { padding: 6px 14px; font-size: clamp(16px, 5vw, 24px); }
+    #pop { top: 34%; }
+    #toast { top: 112px; font-size: 12px; }
+    #video { width: 84px; height: 63px; left: 8px; bottom: calc(2 * var(--row, 54px) + var(--safe, 0px) + 8px); }
+    .card { top: 70px; transform: translateX(-50%); padding: 10px 14px; border-radius: 18px; max-height: calc(100vh - 70px - 2 * var(--row, 54px) - 24px); overflow: auto; }
+    .card h2 { font-size: 22px; margin: 0; }
+    .card .tips { display: none; }
+    .card p { margin: 3px 0; font-size: 13px; }
+    .big { font-size: 20px; padding: 10px 26px; margin: 4px 3px 0; }
+    #endStars { font-size: 34px; }
+    #endMsg { font-size: 18px; }
+  }
+</style>
+<script type="importmap">
+  { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+<style id="mobil">
+/* Telefon düzeni (genişlik ≤700px ya da yükseklik ≤500px, yatay telefon): üstte ince başlık şeridi, altta yana kayan tek satırlık şeritler.
+   Çalışma alanı aradaki boşluğu doldurur. Satır yüksekliği --row. */
+@media (max-width: 700px), (max-height: 500px) {
+  :root { --row: 54px; --safe: env(safe-area-inset-bottom, 0px); }
+  .hud {
+    left: 8px !important; right: 8px !important; top: 8px !important; width: auto !important; max-width: none !important;
+    padding: 6px 10px !important; border-radius: 10px !important;
+  }
+  .hud h1 { font-size: 14px !important; margin: 0 !important; }
+  .hud p.long { display: none !important; }
+  .hud p, .hud .step, .hud #progText { font-size: 12px !important; margin: 2px 0 0 !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hud .prog { margin-top: 4px !important; }
+
+  /* Alt şeritler: tek satır, yana kaydırılır */
+  .bar, .tools, #side, #opts {
+    position: fixed !important; left: 0 !important; right: 0 !important; top: auto !important;
+    transform: none !important; width: auto !important; max-width: none !important; height: var(--row);
+    display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: center !important;
+    justify-content: flex-start !important; gap: 6px !important;
+    overflow-x: auto !important; overflow-y: hidden !important; overscroll-behavior-x: contain;
+    padding: 6px 10px !important; border-radius: 0 !important; border-left: 0 !important; border-right: 0 !important;
+    scrollbar-width: none; -webkit-overflow-scrolling: touch;
+    -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent); mask-image: linear-gradient(90deg, #000 88%, transparent);
+  }
+  .bar::-webkit-scrollbar, .tools::-webkit-scrollbar, #side::-webkit-scrollbar, #opts::-webkit-scrollbar { display: none; }
+  .bar { bottom: 0 !important; height: calc(var(--row) + var(--safe)); padding-bottom: calc(6px + var(--safe)) !important; }
+  .tools, #side { bottom: calc(var(--row) + var(--safe)) !important; }
+  #opts { bottom: calc(2 * var(--row) + var(--safe)) !important; }
+
+  /* Şerit içindeki gruplar da tek satır */
+  .bar > *, .tools > *, #side > *, #opts > * { flex: 0 0 auto !important; }
+  .bar .group, .bar #palette, .bar #sizes, .tools .grp, #opts .grp, .tools .slot, .tools .chars, #patterns, #palette {
+    display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: center !important; gap: 6px !important;
+    margin: 0 !important; padding: 0 !important; border: 0 !important; background: none !important;
+  }
+  #patterns.hidden, #patGrp.hidden { display: none !important; }
+  .tools .slot h2 { margin: 0 4px 0 0 !important; font-size: 12px !important; white-space: nowrap; }
+  .tools .slot h2 small { display: none; }
+  .tools .slot + .slot { border-left: 1px solid rgba(255,255,255,.15) !important; padding-left: 8px !important; }
+
+  /* Dokunmaya uygun boyutlar */
+  .bar button, .tools button, #side button, #opts button { min-height: 40px !important; padding: 6px 11px !important; white-space: nowrap; }
+  .tools button small, #side button small { display: none !important; }
+  .swatch { width: 36px !important; height: 36px !important; min-height: 36px !important; padding: 0 !important; flex: 0 0 auto; }
+  .bar .sep { height: 26px !important; }
+  input[type=color] { width: 36px !important; height: 36px !important; flex: 0 0 auto; }
+  label.size, label.chk { white-space: nowrap; }
+  label.size input[type=range] { width: 90px; height: 32px !important; }
+  label.chk input[type=checkbox] { width: 22px !important; height: 22px !important; }
+  a[data-home-link] { display: inline-block; min-width: 34px; min-height: 34px; line-height: 34px; text-align: center; margin: -8px 0 -8px -8px !important; }
+}
+</style>
+</head>
+<body>
+<video id="video" playsinline muted></video>
+<canvas id="gl"></canvas>
+<div class="cursor" id="cur0"></div>
+<div id="banner" class="hidden"><span id="bannerText"></span></div>
+<div id="pop"></div>
+<div id="toast"></div>
+
+<div class="panel hud">
+  <h1><a href="../" data-home-link title="Tüm atölyeler" style="color:inherit;text-decoration:none;opacity:.7;margin-right:6px;font-weight:400">←</a>🚗 Elinle Sür</h1>
+  <p id="stat">⏱ 60 sn · 🏆 0 · ⭐ 0</p>
+  <p class="long">✋ Elini sağa sola götür = direksiyon. 🤏 Parmaklarını birleştir = zıpla + korna. 🖱️ Sürükle = yönlendir, dokun = zıpla. ⌨️ ← → ve Boşluk.</p>
+</div>
+
+<div class="panel side" id="side">
+  <button class="veh on" data-veh="car">🚗 Araba</button>
+  <button class="veh" data-veh="bus">🚌 Otobüs</button>
+  <button class="veh" data-veh="tractor">🚜 Traktör</button>
+  <button class="veh" data-veh="fire">🚒 İtfaiye</button>
+  <div class="group" id="colors"></div>
+</div>
+
+<div class="panel bar" id="bar">
+  <button id="btnCam">📷 Kamera</button>
+  <button id="btnStart">▶ Başla</button>
+  <button id="btnEasy">🐢 Kolay mod</button>
+  <button id="btnSound" class="on">🔊 Ses</button>
+</div>
+
+<div class="card" id="start">
+  <h2>🚗 Elinle Sür</h2>
+  <p>Aracını seç, sonra <b>Başla</b>'ya bas! Yıldızları ve doğru renk balonları topla.</p>
+  <button class="big" id="bigStart">▶ Başla</button>
+  <p class="tips">📷 Kamerayı aç: elini sağa sola götür = direksiyon, parmaklarını birleştir = zıpla + korna.<br>🖱️ Sürükle = yönlendir, dokun = zıpla &nbsp;·&nbsp; ⌨️ ← → ve Boşluk</p>
+</div>
+
+<div class="card hidden" id="end">
+  <h2>🏁 Tur bitti!</h2>
+  <div id="endStars">⭐⭐⭐</div>
+  <p id="endScore"></p>
+  <p id="endMsg">Harika sürdün!</p>
+  <button class="big" id="btnAgain">🔁 Tekrar oyna</button>
+  <button class="big alt" id="btnChange">🚗 Araç değiştir</button>
+</div>
+
+<script type="module">
+import * as THREE from "three";
+
+// ---------------------------------------------------------------------------
+// Sabitler ve durum
+// ---------------------------------------------------------------------------
+const ROUND = 60, LANE_W = 3, ROAD_W = 9.6, SEG = 20, SEGN = 7, LOOP = SEG * SEGN;
+const SPAWN_Z = -88, STOP = 3.6, XMAX = 3.1, JUMP_D = 0.75, JUMP_H = 1.5;
+const isTouch = matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0;
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const rnd = (a, b) => a + Math.random() * (b - a);
+const $ = (id) => document.getElementById(id);
+
+const BAL = {
+  red: { hex: 0xe53935, tr: "kırmızı", Tr: "Kırmızı", em: "🔴" },
+  blue: { hex: 0x1e88e5, tr: "mavi", Tr: "Mavi", em: "🔵" },
+  yellow: { hex: 0xfdd835, tr: "sarı", Tr: "Sarı", em: "🟡" },
+  green: { hex: 0x43a047, tr: "yeşil", Tr: "Yeşil", em: "🟢" },
+};
+const BKEYS = ["red", "blue", "yellow", "green"];
+const ALIAS = { kirmizi: "red", "kırmızı": "red", mavi: "blue", sari: "yellow", "sarı": "yellow", yesil: "green", "yeşil": "green" };
+const COLORS = [0xe53935, 0x1e88e5, 0xfdd835, 0x43a047, 0x8e24aa, 0xfb8c00];
+const css = (h) => "#" + h.toString(16).padStart(6, "0");
+
+const S = {
+  mode: "menu", running: false, over: false, time: 0, left: ROUND, score: 0, stars: 0, balloons: 0, bonus: 0, rating: 0,
+  target: "red", targetTr: "kırmızı", speed: 0, steer: 0, x: 0, lane: 1, y: 0, vehicle: "car", color: css(COLORS[0]),
+  easy: false, light: "none", wobble: 0, sound: true, auto: true,
+};
+let jumpT = -1, slowT = 0, spawnDist = 14, nextLightT = 10, nextTargetT = 15, announceT = 0, stopT = 0, greenT = 99, tt = 0;
+let lightIt = null, roll = 0, yaw = 0, kbAxis = 0;
+
+// ---------------------------------------------------------------------------
+// Sahne
+// ---------------------------------------------------------------------------
+const canvas = $("gl");
+const video = $("video");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isTouch, preserveDrawingBuffer: !isTouch, powerPreference: "high-performance" });
+renderer.setPixelRatio(Math.min(devicePixelRatio, isTouch ? 1.5 : 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = isTouch ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+const FOG = 0xcdeeff;
+scene.fog = new THREE.Fog(FOG, 42, 100);
+{
+  const c = document.createElement("canvas"); c.width = 4; c.height = 256;
+  const g = c.getContext("2d"), gr = g.createLinearGradient(0, 0, 0, 256);
+  gr.addColorStop(0, "#3f9ef0"); gr.addColorStop(0.42, "#cdeeff"); gr.addColorStop(1, "#cdeeff");
+  g.fillStyle = gr; g.fillRect(0, 0, 4, 256);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; scene.background = t;
+}
+const camera = new THREE.PerspectiveCamera(55, 1, 0.5, 220);
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x9ccc65, 1.35));
+const sun = new THREE.DirectionalLight(0xfff3d6, 1.9);
+sun.position.set(-6, 14, 8); sun.target.position.set(0, 0, 0);
+sun.castShadow = true;
+sun.shadow.mapSize.set(isTouch ? 512 : 1024, isTouch ? 512 : 1024);
+Object.assign(sun.shadow.camera, { left: -9, right: 9, top: 13, bottom: -13, near: 1, far: 40 });
+sun.shadow.bias = -0.0005;
+scene.add(sun, sun.target);
+
+// Geometri / malzeme önbelleği: her şey yeniden kullanılır
+const geoCache = new Map(), matCache = new Map();
+const geo = (key, make) => { let g = geoCache.get(key); if (!g) { g = make(); geoCache.set(key, g); } return g; };
+const lam = (c) => { let m = matCache.get("L" + c); if (!m) { m = new THREE.MeshLambertMaterial({ color: c }); matCache.set("L" + c, m); } return m; };
+const bas = (c) => { let m = matCache.get("B" + c); if (!m) { m = new THREE.MeshBasicMaterial({ color: c }); matCache.set("B" + c, m); } return m; };
+const boxGeo = (w, h, l) => geo(`b${w},${h},${l}`, () => new THREE.BoxGeometry(w, h, l));
+const cylGeo = (a, b, h, n) => geo(`c${a},${b},${h},${n}`, () => new THREE.CylinderGeometry(a, b, h, n));
+const sphGeo = (r) => geo(`s${r}`, () => new THREE.SphereGeometry(r, 14, 10));
+function box(parent, w, h, l, mat, x, y, z) { const m = new THREE.Mesh(boxGeo(w, h, l), mat); m.position.set(x, y, z); parent.add(m); return m; }
+function cyl(parent, a, b, h, mat, x, y, z, n = 12) { const m = new THREE.Mesh(cylGeo(a, b, h, n), mat); m.position.set(x, y, z); parent.add(m); return m; }
+
+// --- Yol, çim, kesitler ----------------------------------------------------
+const roadTex = (() => {
+  const c = document.createElement("canvas"); c.width = 256; c.height = 128;
+  const g = c.getContext("2d");
+  g.fillStyle = "#4b505c"; g.fillRect(0, 0, 256, 128);
+  for (let i = 0; i < 320; i++) { g.fillStyle = Math.random() < 0.5 ? "rgba(255,255,255,.05)" : "rgba(0,0,0,.07)"; g.fillRect(Math.random() * 256, Math.random() * 128, 2, 2); }
+  const px = 256 / ROAD_W;
+  g.fillStyle = "#f6f6f6";
+  for (const e of [-4.5, 4.5]) g.fillRect(128 + e * px - 0.09 * px, 0, 0.18 * px, 128);
+  for (const e of [-1.5, 1.5]) g.fillRect(128 + e * px - 0.08 * px, 0, 0.16 * px, 64);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace; t.wrapT = THREE.RepeatWrapping; t.repeat.set(1, SEG / 5); t.anisotropy = 4;
+  return t;
+})();
+const roadGeo = new THREE.PlaneGeometry(ROAD_W, SEG).rotateX(-Math.PI / 2);
+const grassGeo = new THREE.PlaneGeometry(70, SEG).rotateX(-Math.PI / 2);
+const roadMat = new THREE.MeshLambertMaterial({ map: roadTex });
+const grassMats = [lam(0x7bcf4b), lam(0x6cc23f), lam(0xe3c65c)];
+const GRASS_SEQ = [0, 1, 0, 1, 2, 1];
+let segCounter = 0;
+const segs = [];
+function regrass(s) {
+  s.gl.material = grassMats[GRASS_SEQ[segCounter % 6]];
+  s.gr.material = grassMats[GRASS_SEQ[(segCounter + 3) % 6]];
+  segCounter++;
+}
+for (let i = 0; i < SEGN; i++) {
+  const g = new THREE.Group();
+  const road = new THREE.Mesh(roadGeo, roadMat); road.receiveShadow = true;
+  const gl = new THREE.Mesh(grassGeo, grassMats[0]); gl.position.x = -(4.8 + 35);
+  const gr = new THREE.Mesh(grassGeo, grassMats[0]); gr.position.x = 4.8 + 35;
+  g.add(road, gl, gr); g.position.z = 10 - i * SEG; scene.add(g);
+  const s = { g, gl, gr }; regrass(s); segs.push(s);
+}
+
+// --- Dekor: ağaçlar, çit, evler, hayvanlar, bulutlar, güneş ---------------
+const dummy = new THREE.Object3D();
+const NT = 48, tx = new Float32Array(NT), tz = new Float32Array(NT), ts = new Float32Array(NT);
+const trunks = new THREE.InstancedMesh(cylGeo(0.18, 0.26, 1.2, 6), lam(0x8d5b34), NT);
+const crowns = new THREE.InstancedMesh(geo("crown", () => new THREE.ConeGeometry(1.1, 2.6, 7)), lam(0xffffff), NT);
+trunks.frustumCulled = crowns.frustumCulled = false;
+{
+  const pal = [0x3fa34d, 0x2e8b57, 0x59b84a].map((c) => new THREE.Color(c));
+  for (let i = 0; i < NT; i++) {
+    tz[i] = 20 - (i / NT) * LOOP - Math.random() * 3; ts[i] = rnd(0.8, 1.7);
+    tx[i] = (Math.random() < 0.5 ? -1 : 1) * rnd(7.5, 28);
+    crowns.setColorAt(i, pal[i % 3]);
+  }
+}
+scene.add(trunks, crowns);
+
+const NF = LOOP / 4, fx = [-5.8, 5.8];
+const rails = new THREE.InstancedMesh(boxGeo(0.1, 0.12, 4), lam(0xf4e8cc), NF * 2);
+const posts = new THREE.InstancedMesh(boxGeo(0.14, 1.1, 0.14), lam(0xd9c79c), NF * 2);
+rails.frustumCulled = posts.frustumCulled = false;
+const fz = new Float32Array(NF * 2), fon = new Uint8Array(NF * 2);
+for (let i = 0; i < NF * 2; i++) { fz[i] = 20 - (i % NF) * 4; fon[i] = Math.random() < 0.8 ? 1 : 0; }
+scene.add(rails, posts);
+
+const NC = 7, cx = new Float32Array(NC), cy = new Float32Array(NC), cz = new Float32Array(NC), cs = new Float32Array(NC);
+const cloudMesh = new THREE.InstancedMesh(sphGeo(1), new THREE.MeshBasicMaterial({ color: 0xffffff }), NC * 3);
+cloudMesh.frustumCulled = false;
+for (let i = 0; i < NC; i++) { cx[i] = rnd(-60, 60); cy[i] = rnd(20, 32); cz[i] = -130 + (i / NC) * 160; cs[i] = rnd(1.4, 2.4); }
+scene.add(cloudMesh);
+
+const sunMesh = new THREE.Mesh(sphGeo(7), new THREE.MeshBasicMaterial({ color: 0xfff2a8, fog: false }));
+sunMesh.position.set(-42, 26, -125);
+const sunHalo = new THREE.Mesh(sphGeo(12), new THREE.MeshBasicMaterial({ color: 0xfff6c8, transparent: true, opacity: 0.28, fog: false }));
+sunHalo.position.copy(sunMesh.position);
+scene.add(sunMesh, sunHalo);
+
+const houses = [], animals = [];
+{
+  const walls = [0xffd7a8, 0xf7b2bd, 0xb8e0f6, 0xfff3a1, 0xc9e7b0], roofs = [0xd9534f, 0x8d5a3b, 0x3f6fb5];
+  for (let i = 0; i < 5; i++) {
+    const g = new THREE.Group();
+    box(g, 3.6, 2.6, 3.6, lam(walls[i % 5]), 0, 1.3, 0);
+    const roof = new THREE.Mesh(geo("roof", () => new THREE.ConeGeometry(3.1, 1.8, 4)), lam(roofs[i % 3]));
+    roof.position.y = 3.5; roof.rotation.y = Math.PI / 4; g.add(roof);
+    box(g, 0.75, 1.35, 0.06, lam(0x7a4b2a), 0, 0.68, 1.82);
+    box(g, 0.8, 0.7, 0.06, lam(0xaee0ff), -1.1, 1.6, 1.82);
+    box(g, 0.8, 0.7, 0.06, lam(0xaee0ff), 1.1, 1.6, 1.82);
+    const h = { g, z: 20 - (i / 5) * LOOP - rnd(0, 10) };
+    placeHouse(h); scene.add(g); houses.push(h);
+  }
+  for (let i = 0; i < 6; i++) {
+    const g = new THREE.Group(), cow = i % 2 === 1;
+    if (cow) {
+      box(g, 1.0, 0.9, 1.8, lam(0xf6f6f2), 0, 1.0, 0); box(g, 1.02, 0.4, 0.55, lam(0x2b2b2b), 0, 1.15, 0.25);
+      box(g, 0.5, 0.5, 0.6, lam(0xf2d9d0), 0, 1.25, -1.1); box(g, 0.9, 0.55, 1.5, lam(0xd8d8d2), 0, 0.27, 0);
+    } else {
+      box(g, 0.9, 0.7, 1.2, lam(0xf4f1ea), 0, 0.75, 0); box(g, 0.4, 0.4, 0.4, lam(0x3b3b3b), 0, 0.95, -0.7);
+      box(g, 0.7, 0.4, 0.9, lam(0x3b3b3b), 0, 0.2, 0);
+    }
+    const a = { g, z: 20 - (i / 6) * LOOP - rnd(0, 12) };
+    placeAnimal(a); scene.add(g); animals.push(a);
+  }
+}
+function placeHouse(h) {
+  const side = Math.random() < 0.5 ? -1 : 1;
+  h.g.position.x = side * rnd(12, 22); h.g.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2;
+}
+function placeAnimal(a) {
+  const side = Math.random() < 0.5 ? -1 : 1;
+  a.g.position.x = side * rnd(7.5, 17); a.g.rotation.y = rnd(0, Math.PI * 2);
+}
+
+// --- Parçacıklar (kıvılcım) -------------------------------------------------
+const parts = [];
+for (let i = 0; i < 36; i++) {
+  const m = new THREE.Mesh(geo("spark", () => new THREE.OctahedronGeometry(0.13)), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+  m.visible = false; scene.add(m); parts.push({ m, vx: 0, vy: 0, vz: 0, life: 0 });
+}
+let pi = 0;
+function burst(x, y, z, hex, n) {
+  for (let k = 0; k < n; k++) {
+    const p = parts[pi]; pi = (pi + 1) % parts.length;
+    p.life = 0.7; p.vx = (Math.random() - 0.5) * 6; p.vy = 2 + Math.random() * 3.5; p.vz = (Math.random() - 0.5) * 3;
+    p.m.position.set(x, y, z); p.m.material.color.setHex(hex); p.m.scale.setScalar(1); p.m.visible = true;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Taşıtlar
+// ---------------------------------------------------------------------------
+const carMat = new THREE.MeshLambertMaterial({ color: COLORS[0] });
+const glass = new THREE.MeshLambertMaterial({ color: 0xa8dcff, emissive: 0x1b3a55 });
+const blueLight = new THREE.MeshBasicMaterial({ color: 0x2f6bff }), redLight = new THREE.MeshBasicMaterial({ color: 0xff2a2a });
+
+function makeWheel(parent, list, r, w, x, y, z) {
+  const g = new THREE.Group(); g.position.set(x, y, z);
+  const tyre = new THREE.Mesh(geo(`t${r},${w}`, () => new THREE.CylinderGeometry(r, r, w, 16).rotateZ(Math.PI / 2)), lam(0x2a2a2e));
+  g.add(tyre);
+  box(g, w + 0.03, r * 1.3, r * 0.28, lam(0xd9dde3), 0, 0, 0);
+  box(g, w + 0.03, r * 0.28, r * 1.3, lam(0xd9dde3), 0, 0, 0);
+  parent.add(g); list.push({ g, r });
+}
+const VEH = {
+  car() {
+    const g = new THREE.Group(), wheels = [];
+    box(g, 1.7, 0.6, 3.3, carMat, 0, 0.62, 0);
+    box(g, 1.4, 0.5, 1.5, glass, 0, 1.18, 0.25);
+    box(g, 1.52, 0.08, 1.62, carMat, 0, 1.47, 0.25);
+    box(g, 0.4, 0.2, 0.06, bas(0xfff2a0), -0.55, 0.75, -1.67); box(g, 0.4, 0.2, 0.06, bas(0xfff2a0), 0.55, 0.75, -1.67);
+    box(g, 0.4, 0.2, 0.06, bas(0xff3030), -0.55, 0.75, 1.67); box(g, 0.4, 0.2, 0.06, bas(0xff3030), 0.55, 0.75, 1.67);
+    box(g, 1.75, 0.18, 3.0, lam(0x33363d), 0, 0.36, 0);
+    for (const sx of [-0.88, 0.88]) for (const z of [-1.0, 1.0]) makeWheel(g, wheels, 0.36, 0.26, sx, 0.36, z);
+    return { g, wheels, halfW: 0.9, halfL: 1.65 };
+  },
+  bus() {
+    const g = new THREE.Group(), wheels = [];
+    box(g, 2.1, 1.7, 4.8, lam(0xffc61a), 0, 1.25, 0);
+    box(g, 2.12, 0.16, 4.82, lam(0xf57c00), 0, 0.82, 0);
+    box(g, 2.13, 0.55, 4.0, glass, 0, 1.6, 0.1);
+    box(g, 1.7, 0.7, 0.06, glass, 0, 1.5, -2.41);
+    box(g, 2.0, 0.08, 4.6, lam(0xfff0b3), 0, 2.13, 0);
+    box(g, 0.36, 0.22, 0.06, bas(0xfff2a0), -0.7, 0.8, -2.41); box(g, 0.36, 0.22, 0.06, bas(0xfff2a0), 0.7, 0.8, -2.41);
+    box(g, 0.36, 0.22, 0.06, bas(0xff3030), -0.7, 0.8, 2.41); box(g, 0.36, 0.22, 0.06, bas(0xff3030), 0.7, 0.8, 2.41);
+    for (const sx of [-1.0, 1.0]) for (const z of [-1.55, 1.55]) makeWheel(g, wheels, 0.42, 0.28, sx, 0.42, z);
+    return { g, wheels, halfW: 1.05, halfL: 2.4 };
+  },
+  tractor() {
+    const g = new THREE.Group(), wheels = [];
+    const green = lam(0x43a047);
+    box(g, 1.1, 0.75, 1.9, green, 0, 1.0, -0.8);
+    box(g, 1.3, 0.55, 1.5, green, 0, 0.8, 0.85);
+    box(g, 0.8, 0.12, 0.08, lam(0x2b2b2b), 0, 1.0, -1.77);
+    cyl(g, 0.06, 0.06, 0.8, lam(0x888d96), 0.3, 1.8, -1.2, 8);
+    for (const sx of [-0.62, 0.62]) for (const z of [0.2, 1.5]) box(g, 0.08, 1.0, 0.08, lam(0xf2c230), sx, 1.7, z);
+    box(g, 1.5, 0.1, 1.6, lam(0xf2c230), 0, 2.25, 0.85);
+    box(g, 0.7, 0.12, 0.6, lam(0x3b3b3b), 0, 1.15, 0.9);
+    for (const sx of [-1.0, 1.0]) makeWheel(g, wheels, 0.75, 0.4, sx, 0.75, 0.9);
+    for (const sx of [-0.75, 0.75]) makeWheel(g, wheels, 0.4, 0.26, sx, 0.4, -1.3);
+    return { g, wheels, halfW: 1.25, halfL: 1.8 };
+  },
+  fire() {
+    const g = new THREE.Group(), wheels = [];
+    const red = lam(0xd32f2f);
+    box(g, 2.0, 1.0, 4.4, red, 0, 0.95, 0.2);
+    box(g, 2.0, 0.9, 1.4, red, 0, 1.9, -1.5);
+    box(g, 2.02, 0.2, 4.42, lam(0xffffff), 0, 0.78, 0.2);
+    box(g, 1.7, 0.5, 0.06, glass, 0, 1.95, -2.21);
+    box(g, 2.03, 0.4, 1.0, glass, 0, 1.95, -1.5);
+    box(g, 0.42, 0.18, 0.4, blueLight, -0.45, 2.5, -1.5); box(g, 0.42, 0.18, 0.4, redLight, 0.45, 2.5, -1.5);
+    for (const sx of [-0.32, 0.32]) box(g, 0.08, 0.08, 3.4, lam(0xc7ccd4), sx, 1.58, 0.7);
+    for (let k = 0; k < 5; k++) box(g, 0.7, 0.05, 0.05, lam(0xc7ccd4), 0, 1.58, -0.8 + k * 0.75);
+    box(g, 0.4, 0.2, 0.06, bas(0xfff2a0), -0.6, 0.85, -2.01); box(g, 0.4, 0.2, 0.06, bas(0xfff2a0), 0.6, 0.85, -2.01);
+    for (const sx of [-1.0, 1.0]) for (const z of [-1.4, 1.3]) makeWheel(g, wheels, 0.42, 0.28, sx, 0.42, z);
+    return { g, wheels, halfW: 1.05, halfL: 2.2, blink: true };
+  },
+};
+const vehCache = {};
+const carRoot = new THREE.Group(), tilt = new THREE.Group();
+carRoot.add(tilt); scene.add(carRoot);
+let V = null;
+const VALIAS = { araba: "car", otobus: "bus", "otobüs": "bus", "traktör": "tractor", traktor: "tractor", itfaiye: "fire" };
+function setVehicle(key) {
+  key = VALIAS[key] || key;
+  if (!VEH[key]) return false;
+  if (!vehCache[key]) {
+    vehCache[key] = VEH[key]();
+    vehCache[key].g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  }
+  if (V) tilt.remove(V.g);
+  V = vehCache[key]; tilt.add(V.g); S.vehicle = key;
+  syncUI(); return true;
+}
+function setColor(c) {
+  const n = typeof c === "number" ? c : parseInt(String(c).replace("#", ""), 16);
+  if (!Number.isFinite(n)) return false;
+  carMat.color.setHex(n); S.color = css(n); syncUI(); return true;
+}
+
+// ---------------------------------------------------------------------------
+// Nesneler: yıldız, balon, koni, su birikintisi, trafik ışığı (havuzlardan)
+// ---------------------------------------------------------------------------
+const POOL = {}, ALL = [];
+const K = { star: 0, balloon: 1, cone: 2, puddle: 3, light: 4 };
+function addPool(type, kind, n, y0, factory) {
+  POOL[type] = [];
+  for (let i = 0; i < n; i++) {
+    const mesh = factory(); mesh.visible = false; scene.add(mesh);
+    const it = { type, kind, mesh, active: false, done: false, hit: false, x: 0, z: 0, y0, t: 0, dir: 1, seed: Math.random() * 6.28, col: type.startsWith("balloon-") ? type.slice(8) : "" };
+    ALL.push(it); POOL[type].push(it);
+  }
+}
+const starGeo = () => {
+  const s = new THREE.Shape();
+  for (let i = 0; i < 10; i++) {
+    const r = i % 2 ? 0.26 : 0.58, a = Math.PI / 2 + (i * Math.PI) / 5;
+    const x = Math.cos(a) * r, y = Math.sin(a) * r;
+    i ? s.lineTo(x, y) : s.moveTo(x, y);
+  }
+  s.closePath();
+  const g = new THREE.ExtrudeGeometry(s, { depth: 0.18, bevelEnabled: false }); g.center(); return g;
+};
+const starMat = new THREE.MeshLambertMaterial({ color: 0xffc928, emissive: 0x7a5200 });
+addPool("star", K.star, 30, 1.1, () => new THREE.Mesh(geo("star", starGeo), starMat));
+for (const key of BKEYS) {
+  addPool("balloon-" + key, K.balloon, 8, 1.7, () => {
+    const g = new THREE.Group(), mat = new THREE.MeshLambertMaterial({ color: BAL[key].hex, emissive: BAL[key].hex, emissiveIntensity: 0.18 });
+    const b = new THREE.Mesh(geo("balloon", () => new THREE.SphereGeometry(0.5, 14, 10).scale(1, 1.2, 1)), mat); b.position.y = 0.4; g.add(b);
+    const hl = new THREE.Mesh(sphGeo(0.1), bas(0xffffff)); hl.position.set(-0.2, 0.7, 0.38); g.add(hl);
+    cyl(g, 0.1, 0.01, 0.16, mat, 0, -0.26, 0, 6);
+    cyl(g, 0.012, 0.012, 0.9, bas(0xe8e8e8), 0, -0.75, 0, 4);
+    return g;
+  });
+}
+addPool("cone", K.cone, 8, 0, () => {
+  const g = new THREE.Group();
+  box(g, 0.9, 0.08, 0.9, lam(0x333333), 0, 0.04, 0);
+  const c = new THREE.Mesh(geo("cone", () => new THREE.ConeGeometry(0.42, 0.9, 12)), lam(0xff6f1f)); c.position.y = 0.53; g.add(c);
+  cyl(g, 0.245, 0.27, 0.16, lam(0xffffff), 0, 0.4, 0, 12);
+  g.traverse((o) => { o.castShadow = true; });
+  return g;
+});
+const puddleMat = new THREE.MeshLambertMaterial({ color: 0x6ec5ff, emissive: 0x1a4b73, transparent: true, opacity: 0.88, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+addPool("puddle", K.puddle, 6, 0.04, () => new THREE.Mesh(geo("puddle", () => new THREE.CircleGeometry(1.15, 20).rotateX(-Math.PI / 2).scale(1.25, 1, 0.85)), puddleMat));
+const lampRed = new THREE.MeshBasicMaterial({ color: 0xff3030 }), lampGreen = new THREE.MeshBasicMaterial({ color: 0x14381c });
+addPool("light", K.light, 1, 0, () => {
+  const g = new THREE.Group();
+  const line = new THREE.Mesh(geo("stopline", () => new THREE.PlaneGeometry(9, 0.5).rotateX(-Math.PI / 2)),
+    new THREE.MeshLambertMaterial({ color: 0xffffff, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+  line.position.y = 0.03; g.add(line);
+  for (const sx of [-5.3, 5.3]) {
+    cyl(g, 0.09, 0.09, 3.4, lam(0x555a63), sx, 1.7, -0.8, 8);
+    box(g, 0.75, 1.9, 0.6, lam(0x1d1f24), sx, 3.6, -0.8);
+    const r = new THREE.Mesh(sphGeo(0.26), lampRed); r.position.set(sx, 4.1, -0.45); g.add(r);
+    const y = new THREE.Mesh(sphGeo(0.26), bas(0x4a4015)); y.position.set(sx, 3.6, -0.45); g.add(y);
+    const gr = new THREE.Mesh(sphGeo(0.26), lampGreen); gr.position.set(sx, 3.1, -0.45); g.add(gr);
+  }
+  return g;
+});
+function setLamps() {
+  lampRed.color.setHex(S.light === "red" ? 0xff3030 : 0x4a1515);
+  lampGreen.color.setHex(S.light === "green" ? 0x35e060 : 0x14381c);
+}
+
+function normType(t) {
+  t = String(t || "").toLowerCase();
+  if (t === "balloon" || t === "balon") return "balloon-" + S.target;
+  if (t.startsWith("balloon-") || t.startsWith("balon-")) { let c = t.slice(t.indexOf("-") + 1); c = ALIAS[c] || c; return "balloon-" + c; }
+  if (t === "yıldız" || t === "yildiz") return "star";
+  if (t === "koni") return "cone";
+  if (t === "birikinti" || t === "su") return "puddle";
+  if (t === "ışık" || t === "isik" || t === "trafficlight") return "light";
+  return t;
+}
+function spawnItem(type, lane = 1, z = SPAWN_Z) {
+  type = normType(type);
+  const pool = POOL[type];
+  if (!pool) return null;
+  let it = null;
+  for (let i = 0; i < pool.length; i++) if (!pool[i].active) { it = pool[i]; break; }
+  if (!it) return null;
+  if (it.kind === K.light && lightIt) return null;
+  lane = clamp(Math.round(+lane), 0, 2);
+  it.active = true; it.done = false; it.hit = false; it.t = 0;
+  it.x = (lane - 1) * LANE_W; it.z = z;
+  const m = it.mesh; m.rotation.set(0, 0, 0); m.scale.set(1, 1, 1);
+  m.position.set(it.kind === K.light ? 0 : it.x, it.y0, z); m.visible = true;
+  if (it.kind === K.light) { lightIt = it; S.light = "red"; stopT = 0; greenT = 99; setLamps(); snd.red(); }
+  return it;
+}
+function release(it) {
+  it.active = false; it.mesh.visible = false;
+  if (it === lightIt) { lightIt = null; S.light = "none"; setLamps(); nextLightT = S.time + 8; }
+}
+function clearItems() { for (let i = 0; i < ALL.length; i++) if (ALL[i].active) release(ALL[i]); }
+
+function spawnRow() {
+  const z = SPAWN_Z;
+  if (lightIt && Math.abs(lightIt.z - z) < 8) { spawnDist = 3; return; }
+  const lane = (Math.random() * 3) | 0, r = Math.random();
+  const others = (l) => (l + 1 + ((Math.random() * 2) | 0)) % 3;
+  if (r < 0.42 || (S.easy && r >= 0.78)) {
+    for (let k = 0; k < 3; k++) spawnItem("star", lane, z - k * 3);
+  } else if (r < 0.78) {
+    let cA = BKEYS[(Math.random() * 4) | 0], cB = BKEYS[(Math.random() * 4) | 0];
+    if (Math.random() < 0.8) { if (Math.random() < 0.5) cA = S.target; else cB = S.target; }
+    spawnItem("balloon-" + cA, lane, z);
+    if (Math.random() < 0.65) spawnItem("balloon-" + cB, others(lane), z - 2);
+  } else {
+    spawnItem(Math.random() < 0.55 ? "cone" : "puddle", lane, z);
+    if (Math.random() < 0.5) spawnItem("star", others(lane), z - 1);
+  }
+  if (Math.random() < 0.3) spawnItem("star", others(lane), z - 7);
+}
+
+// ---------------------------------------------------------------------------
+// Ses (WebAudio ile üretilir; kullanıcı dokunuşundan sonra başlar)
+// ---------------------------------------------------------------------------
+let ac = null, master = null, eng = null, soundOn = true, engAcc = 0;
+function unlockAudio() {
+  if (!ac) {
+    try {
+      ac = new (window.AudioContext || window.webkitAudioContext)();
+      master = ac.createGain(); master.gain.value = soundOn ? 0.8 : 0; master.connect(ac.destination);
+      const o = ac.createOscillator(), f = ac.createBiquadFilter(), g = ac.createGain();
+      o.type = "sawtooth"; o.frequency.value = 45; f.type = "lowpass"; f.frequency.value = 240; g.gain.value = 0;
+      o.connect(f); f.connect(g); g.connect(master); o.start(); eng = { o, g };
+    } catch { ac = null; }
+  }
+  if (ac && ac.state === "suspended") ac.resume();
+}
+function tone(f, d, type = "sine", v = 0.2, delay = 0, slide = 0) {
+  if (!ac || !soundOn) return;
+  const t = ac.currentTime + delay, o = ac.createOscillator(), g = ac.createGain();
+  o.type = type; o.frequency.setValueAtTime(f, t);
+  if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, slide), t + d);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t + d + 0.05);
+}
+const snd = {
+  ding() { tone(1318, 0.12, "sine", 0.17); tone(1760, 0.2, "sine", 0.13, 0.07); },
+  chime() { [784, 988, 1318, 1568].forEach((f, i) => tone(f, 0.3, "triangle", 0.18, i * 0.07)); },
+  boing() { tone(420, 0.34, "sine", 0.22, 0, 150); tone(840, 0.3, "triangle", 0.07, 0, 300); },
+  bump() { tone(170, 0.2, "square", 0.08, 0, 70); },
+  horn() { tone(311, 0.4, "sawtooth", 0.05); tone(392, 0.4, "sawtooth", 0.05); },
+  jump() { tone(300, 0.2, "sine", 0.1, 0, 640); },
+  red() { tone(440, 0.12, "square", 0.04); tone(440, 0.12, "square", 0.04, 0.2); },
+  green() { tone(523, 0.14, "triangle", 0.14); tone(784, 0.28, "triangle", 0.12, 0.12); },
+  target() { tone(660, 0.12, "triangle", 0.12); tone(880, 0.22, "triangle", 0.1, 0.1); },
+  go() { tone(523, 0.12, "triangle", 0.12); tone(659, 0.12, "triangle", 0.12, 0.1); tone(784, 0.2, "triangle", 0.12, 0.2); },
+  jingle() { [523, 659, 784, 1047, 784, 1047].forEach((f, i) => tone(f, 0.28, "triangle", 0.2, i * 0.13)); },
+};
+function engineUpdate() {
+  if (!eng || !ac) return;
+  const run = S.mode === "play" && soundOn;
+  eng.o.frequency.setTargetAtTime(40 + S.speed * 4.2, ac.currentTime, 0.1);
+  eng.g.gain.setTargetAtTime(run ? 0.035 : 0, ac.currentTime, 0.15);
+}
+function setSound(on) {
+  soundOn = S.sound = !!on;
+  if (master) master.gain.setTargetAtTime(soundOn ? 0.8 : 0, ac.currentTime, 0.02);
+  const b = $("btnSound"); b.textContent = soundOn ? "🔊 Ses" : "🔇 Ses kapalı"; b.classList.toggle("on", soundOn);
+  engineUpdate();
+}
+
+// ---------------------------------------------------------------------------
+// Arayüz
+// ---------------------------------------------------------------------------
+const toastEl = $("toast"); let toastT = 0;
+function setStatus(t) {
+  toastEl.textContent = t; toastEl.classList.add("on");
+  clearTimeout(toastT); toastT = setTimeout(() => toastEl.classList.remove("on"), 4500);
+}
+const popEl = $("pop");
+function pop(t) { popEl.textContent = t; popEl.classList.remove("go"); void popEl.offsetWidth; popEl.classList.add("go"); }
+
+const colorsEl = $("colors");
+COLORS.forEach((c) => {
+  const b = document.createElement("button");
+  b.className = "swatch"; b.dataset.col = css(c); b.style.background = css(c); b.title = "Renk";
+  b.onclick = () => setColor(c);
+  colorsEl.appendChild(b);
+});
+document.querySelectorAll(".veh").forEach((b) => (b.onclick = () => setVehicle(b.dataset.veh)));
+function syncUI() {
+  document.querySelectorAll(".veh").forEach((b) => b.classList.toggle("on", b.dataset.veh === S.vehicle));
+  document.querySelectorAll(".swatch").forEach((b) => b.classList.toggle("on", b.dataset.col === S.color));
+  colorsEl.classList.toggle("hidden", S.vehicle !== "car");
+}
+
+let bKey = "";
+function updateBanner() {
+  const T = BAL[S.target];
+  let txt = "", bg = css(T.hex), fg = "#fff", show = true;
+  if (S.light === "red") { txt = "🔴 Kırmızı ışık: dur!"; bg = "#d32f2f"; }
+  else if (S.light === "green" && greenT < 2.5) { txt = "🟢 Yeşil ışık: geç!"; bg = "#2e9e4a"; }
+  else if (S.mode === "menu" || S.mode === "end") show = false;
+  else {
+    txt = announceT > 0 ? `${T.em} Şimdi ${T.tr}!` : `${T.em} ${T.Tr} balonları topla!`;
+    if (S.target === "yellow") fg = "#3b2f00";
+  }
+  const key = show + txt + bg + fg;
+  if (key === bKey) return;
+  bKey = key;
+  $("banner").classList.toggle("hidden", !show);
+  const el = $("bannerText"); el.textContent = txt; el.style.background = bg; el.style.color = fg;
+}
+let lastStat = "";
+function updateUI() {
+  const txt = `⏱ ${Math.ceil(S.left)} sn · 🏆 ${S.score} · ⭐ ${S.stars}`;
+  if (txt !== lastStat) { lastStat = txt; $("stat").textContent = txt; }
+  updateBanner();
+}
+function setMode(m) {
+  S.mode = m; S.running = m === "play"; S.over = m === "end";
+  $("start").classList.toggle("hidden", m !== "menu");
+  $("end").classList.toggle("hidden", m !== "end");
+  $("side").classList.toggle("hidden", m === "play" || m === "paused");
+  $("btnStart").textContent = m === "play" ? "⏸ Duraklat" : m === "paused" ? "▶ Devam" : "▶ Başla";
+  updateBanner(); engineUpdate();
+}
+function setEasy(on) { S.easy = !!on; $("btnEasy").classList.toggle("on", S.easy); }
+function setTarget(key, announce) {
+  S.target = key; S.targetTr = BAL[key].tr; announceT = announce ? 2.2 : 0;
+  if (announce) snd.target();
+}
+
+// ---------------------------------------------------------------------------
+// Tur akışı
+// ---------------------------------------------------------------------------
+function resetRound() {
+  clearItems(); lightIt = null;
+  Object.assign(S, { time: 0, left: ROUND, score: 0, stars: 0, balloons: 0, bonus: 0, rating: 0, light: "none", wobble: 0, y: 0, speed: 3 });
+  setLamps();
+  jumpT = -1; slowT = 0; spawnDist = 14; nextLightT = 10; nextTargetT = 15; announceT = 0; stopT = 0; greenT = 99;
+  setTarget(BKEYS[(Math.random() * 4) | 0], false);
+}
+function start() { unlockAudio(); resetRound(); setMode("play"); snd.go(); }
+function stop() { if (S.mode === "play" || S.mode === "paused") { clearItems(); S.light = "none"; setMode("menu"); } }
+function pause() { if (S.mode === "play") setMode("paused"); }
+function resume() { if (S.mode === "paused") setMode("play"); }
+function endRound() {
+  const hi = S.easy ? [8, 20] : [12, 28]; // çocuklar için kolay yıldız: çoğu tur en az 2 yıldız
+  S.rating = S.score >= hi[1] ? 3 : S.score >= hi[0] ? 2 : 1;
+  S.left = 0; clearItems(); setMode("end");
+  $("endStars").textContent = "⭐".repeat(S.rating) + "☆".repeat(3 - S.rating);
+  $("endScore").textContent = `Puan: ${S.score} · Yıldız: ${S.stars} · Balon: ${S.balloons}`;
+  $("endMsg").textContent = S.rating === 3 ? "Harika sürdün!" : S.rating === 2 ? "Çok güzel sürdün! Biraz daha, 3 yıldız yakın!" : "Güzel deneme! Bir daha dene, daha da iyi olacak!";
+  snd.jingle();
+}
+$("bigStart").onclick = start;
+$("btnAgain").onclick = start;
+$("btnChange").onclick = () => setMode("menu");
+$("btnStart").onclick = () => { unlockAudio(); if (S.mode === "play") pause(); else if (S.mode === "paused") resume(); else start(); };
+$("btnEasy").onclick = () => setEasy(!S.easy);
+$("btnSound").onclick = () => { unlockAudio(); setSound(!soundOn); };
+
+function addScore(n, label) { S.score += n; if (label) pop(label); }
+function jump() {
+  if (S.mode === "paused" || jumpT >= 0) return false;
+  jumpT = 0; snd.jump(); return true;
+}
+
+// ---------------------------------------------------------------------------
+// Benzetim
+// ---------------------------------------------------------------------------
+function sim(dt) {
+  if (S.mode === "paused") return;
+  const playing = S.mode === "play";
+  tt += dt;
+  if (playing) {
+    S.time += dt; S.left = Math.max(0, ROUND - S.time);
+    if (announceT > 0) announceT -= dt;
+    if (S.time >= nextTargetT) {
+      nextTargetT += 15;
+      let k; do { k = BKEYS[(Math.random() * 4) | 0]; } while (k === S.target);
+      setTarget(k, true);
+    }
+  }
+  if (kbAxis) S.steer = clamp(S.steer + kbAxis * dt * 1.8, -1, 1);
+
+  // Hız: yumuşak hızlanma, çarpınca yavaşlama, kırmızı ışıkta frenleme
+  const p = Math.min(1, S.time / ROUND);
+  const cruise = !playing ? 4.5 : S.easy ? 6.5 + 2.5 * p : 10 + 4 * p;
+  slowT = Math.max(0, slowT - dt * 0.9);
+  const goal = cruise * (1 - 0.55 * slowT);
+  if (S.speed < goal) S.speed = Math.min(goal, S.speed + 5 * dt); else S.speed = Math.max(goal, S.speed - 8 * dt);
+  if (lightIt && S.light === "red") {
+    const d = -lightIt.z - STOP;
+    const prof = d <= 0.05 ? 0 : d < 0.5 ? d * 3 : Math.sqrt(12 * d);
+    if (S.speed > prof) S.speed = prof;
+    if (d < 0.6 && S.speed < 0.15) {
+      stopT += dt;
+      if (stopT >= 2) { S.light = "green"; greenT = 0; setLamps(); snd.green(); }
+    }
+  }
+  if (S.light === "green") greenT += dt;
+  const dz = S.speed * dt;
+
+  // Araç
+  const nx = S.x + (S.steer * XMAX - S.x) * (1 - Math.exp(-6 * dt));
+  const lv = (nx - S.x) / dt; S.x = nx;
+  S.lane = clamp(Math.round(S.x / LANE_W) + 1, 0, 2);
+  roll += (clamp(lv * 0.022, -0.14, 0.14) - roll) * Math.min(1, dt * 10);
+  yaw += (clamp(lv * 0.03, -0.25, 0.25) - yaw) * Math.min(1, dt * 10);
+  if (jumpT >= 0) {
+    jumpT += dt / JUMP_D;
+    if (jumpT >= 1) { jumpT = -1; S.y = 0; } else S.y = 4 * JUMP_H * jumpT * (1 - jumpT);
+  }
+  S.wobble = Math.max(0, S.wobble - dt * 0.9);
+  const w = V.wheels;
+  for (let i = 0; i < w.length; i++) w[i].g.rotation.x -= (S.speed * dt) / w[i].r;
+
+  scroll(dz, dt);
+  updateItems(dt, dz, playing);
+
+  if (playing && S.auto) {
+    spawnDist -= dz;
+    if (spawnDist <= 0) { spawnRow(); spawnDist = S.easy ? rnd(12, 15) : rnd(11, 15); }
+    if (!lightIt && S.time >= nextLightT && S.time < 48) spawnItem("light", 1);
+  }
+  if (playing && S.time >= ROUND) endRound();
+}
+
+function scroll(dz, dt) {
+  for (let i = 0; i < SEGN; i++) {
+    const s = segs[i]; s.g.position.z += dz;
+    if (s.g.position.z > 30) { s.g.position.z -= LOOP; regrass(s); }
+  }
+  for (let i = 0; i < NT; i++) {
+    tz[i] += dz;
+    if (tz[i] > 20) { tz[i] -= LOOP; tx[i] = (Math.random() < 0.5 ? -1 : 1) * rnd(7.5, 28); ts[i] = rnd(0.8, 1.7); }
+    dummy.position.set(tx[i], 0.6 * ts[i], tz[i]); dummy.scale.setScalar(ts[i]); dummy.updateMatrix(); trunks.setMatrixAt(i, dummy.matrix);
+    dummy.position.y = 2.5 * ts[i]; dummy.updateMatrix(); crowns.setMatrixAt(i, dummy.matrix);
+  }
+  trunks.instanceMatrix.needsUpdate = true; crowns.instanceMatrix.needsUpdate = true;
+  for (let i = 0; i < NF * 2; i++) {
+    fz[i] += dz;
+    if (fz[i] > 22) { fz[i] -= LOOP; fon[i] = Math.random() < 0.8 ? 1 : 0; }
+    const sc = fon[i] ? 1 : 0.0001, x = fx[i < NF ? 0 : 1];
+    dummy.position.set(x, 0.85, fz[i]); dummy.scale.setScalar(sc); dummy.updateMatrix(); rails.setMatrixAt(i, dummy.matrix);
+    dummy.position.set(x, 0.55, fz[i] + 2); dummy.updateMatrix(); posts.setMatrixAt(i, dummy.matrix);
+  }
+  rails.instanceMatrix.needsUpdate = true; posts.instanceMatrix.needsUpdate = true;
+  for (let i = 0; i < houses.length; i++) {
+    const h = houses[i]; h.z += dz;
+    if (h.z > 22) { h.z -= LOOP; placeHouse(h); }
+    h.g.position.z = h.z;
+  }
+  for (let i = 0; i < animals.length; i++) {
+    const a = animals[i]; a.z += dz;
+    if (a.z > 22) { a.z -= LOOP; placeAnimal(a); }
+    a.g.position.z = a.z;
+  }
+  const cdz = dz * 0.25 + dt * 0.6;
+  for (let i = 0; i < NC; i++) {
+    cz[i] += cdz;
+    if (cz[i] > 30) { cz[i] -= 160; cx[i] = rnd(-60, 60); }
+    for (let k = 0; k < 3; k++) {
+      dummy.position.set(cx[i] + (k - 1) * 1.7 * cs[i], cy[i] + (k === 1 ? 0.6 * cs[i] : 0), cz[i]);
+      dummy.scale.set(cs[i] * (k === 1 ? 2.2 : 1.6), cs[i] * (k === 1 ? 1.3 : 0.95), cs[i] * 1.3);
+      dummy.updateMatrix(); cloudMesh.setMatrixAt(i * 3 + k, dummy.matrix);
+    }
+  }
+  cloudMesh.instanceMatrix.needsUpdate = true;
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i]; if (p.life <= 0) continue;
+    p.life -= dt;
+    if (p.life <= 0) { p.m.visible = false; continue; }
+    p.vy -= 9 * dt;
+    p.m.position.x += p.vx * dt; p.m.position.y += p.vy * dt; p.m.position.z += p.vz * dt + dz;
+    p.m.scale.setScalar(p.life / 0.7);
+  }
+}
+
+function updateItems(dt, dz, playing) {
+  const hz = V.halfL * 0.7 + 0.35, hx = V.halfW + 0.35;
+  for (let i = 0; i < ALL.length; i++) {
+    const it = ALL[i];
+    if (!it.active) continue;
+    it.z += dz;
+    if (it.z > 8.5) { release(it); continue; }
+    const m = it.mesh;
+    m.position.z = it.z;
+    if (it.kind === K.light) continue;
+    if (it.kind === K.star) { m.rotation.y += dt * 3; m.position.y = it.y0 + Math.sin(tt * 4 + it.seed) * 0.1; }
+    else if (it.kind === K.balloon) { m.position.y = it.y0 + Math.sin(tt * 2.5 + it.seed) * 0.15; m.rotation.z = Math.sin(tt * 1.8 + it.seed) * 0.08; }
+    else if (it.kind === K.cone && it.hit) {
+      it.t += dt; m.rotation.z += it.dir * dt * 9; m.position.x += it.dir * dt * 5;
+      m.position.y = Math.max(0, 3 * it.t - 6 * it.t * it.t);
+    }
+    if (!playing || it.done) continue;
+    if (it.z < -hz || it.z > hz) continue;
+    const dx = it.x - S.x;
+    if (dx > hx || dx < -hx) continue;
+    switch (it.kind) {
+      case K.star:
+        it.done = true; release(it); S.stars++; addScore(1);
+        burst(it.x, 1.1, it.z, 0xffd24a, 8); snd.ding(); break;
+      case K.balloon:
+        it.done = true; release(it);
+        if (it.col === S.target) {
+          S.balloons++; addScore(3, "+3 🎈 Aferin!"); burst(it.x, 1.8, it.z, BAL[it.col].hex, 14); burst(it.x, 1.8, it.z, 0xffffff, 6); snd.chime();
+        } else { burst(it.x, 1.8, it.z, 0xcfd8dc, 6); snd.boing(); }
+        break;
+      default: // koni, su birikintisi
+        if (S.y > 0.5) { it.done = true; S.bonus++; addScore(1, "+1 Atladın! 🦘"); burst(it.x, 0.8, it.z, 0xffd24a, 8); snd.ding(); }
+        else if (it.z > 0) {
+          it.done = true; it.hit = true; it.dir = dx >= 0 ? 1 : -1;
+          S.wobble = 1; slowT = 1; snd.bump();
+          if (it.kind === K.puddle) burst(it.x, 0.3, it.z, 0x6ec5ff, 10);
+        }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Çizim
+// ---------------------------------------------------------------------------
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h; applyCameraShape();
+}
+function applyCameraShape() {
+  const k = clamp((1.2 - camera.aspect) / 0.7, 0, 1);
+  camera.fov = 55 + 27 * k; camera.updateProjectionMatrix();
+}
+addEventListener("resize", resize);
+
+function updateCamera() {
+  const k = clamp((1.2 - camera.aspect) / 0.7, 0, 1);
+  camera.position.set(S.x * 0.6, 4.4 + 1.2 * k + S.y * 0.3, 8.8 + 3.7 * k);
+  camera.lookAt(S.x * 0.3, 1.0, -9);
+}
+function render() {
+  const bob = Math.sin(tt * 18) * 0.02 * Math.min(1, S.speed / 8);
+  carRoot.position.set(S.x, S.y + bob, 0);
+  const wob = S.wobble;
+  tilt.rotation.set(jumpT >= 0 ? -0.1 * Math.sin(jumpT * Math.PI) : 0, -yaw + Math.sin(tt * 28) * 0.3 * wob, roll + Math.sin(tt * 24) * 0.1 * wob);
+  if (V.blink) { const on = Math.floor(tt * 6) % 2 === 0; blueLight.color.setHex(on ? 0x2f6bff : 0x0b1a44); redLight.color.setHex(on ? 0x440c0c : 0xff2a2a); }
+  updateCamera();
+  renderer.render(scene, camera);
+}
+function advance(total) {
+  let rem = total;
+  while (rem > 1e-6) { const dt = Math.min(rem, 1 / 30); rem -= dt; sim(dt); }
+  engAcc += total; if (engAcc > 0.1) { engAcc = 0; engineUpdate(); }
+}
+function step(dt = 1 / 60) { advance(dt); updateUI(); render(); }
+
+// ---------------------------------------------------------------------------
+// Giriş: el (MediaPipe) + fare/dokunma + klavye
+// ---------------------------------------------------------------------------
+const hands = [null, null];
+let landmarker = null, camOn = false, lastVideoTime = -1;
+
+async function loadLandmarker() {
+  setStatus("El takibi modeli yükleniyor…");
+  const { FilesetResolver, HandLandmarker } = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs");
+  const files = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
+  const opts = (delegate) => ({
+    baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task", delegate },
+    runningMode: "VIDEO", numHands: 2, minHandDetectionConfidence: 0.6, minTrackingConfidence: 0.5,
+  });
+  try { return await HandLandmarker.createFromOptions(files, opts("GPU")); }
+  catch { return await HandLandmarker.createFromOptions(files, opts("CPU")); }
+}
+
+async function toggleCamera() {
+  const btn = document.getElementById("btnCam");
+  if (camOn) {
+    video.srcObject?.getTracks().forEach((t) => t.stop());
+    video.srcObject = null; video.classList.remove("on"); camOn = false; hands[0] = hands[1] = null;
+    btn.textContent = "📷 Kamera"; setStatus("Kamera kapalı."); return;
+  }
+  try {
+    btn.disabled = true;
+    if (!landmarker) landmarker = await loadLandmarker();
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" }, audio: false });
+    video.srcObject = stream; await video.play();
+    video.classList.add("on"); camOn = true; btn.textContent = "📷 Kapat";
+    setStatus("Elini göster: sağa sola = direksiyon, parmaklarını birleştir = zıpla + korna!");
+  } catch (err) {
+    console.error(err);
+    setStatus("Kamera açılamadı: " + (err?.message || err) + " — fareyle ya da klavyeyle devam edebilirsin.");
+  } finally { btn.disabled = false; }
+}
+document.getElementById("btnCam").onclick = toggleCamera;
+
+function videoToScreen(nx, ny) {
+  const W = innerWidth, H = innerHeight, vw = video.videoWidth || 1280, vh = video.videoHeight || 720;
+  const s = Math.max(W / vw, H / vh), dw = vw * s, dh = vh * s;
+  return { x: (W - dw) / 2 + (1 - nx) * dw, y: (H - dh) / 2 + ny * dh };
+}
+
+// --- Kararlı el işaretçisi -------------------------------------------------
+// One Euro filtresi: el yavaşken titreşimi güçlü biçimde bastırır,
+// hızlı hareket ederken gecikmeyi azaltır.
+class OneEuro {
+  constructor(minCutoff = 1.0, beta = 0.004, dCutoff = 1.0) { Object.assign(this, { minCutoff, beta, dCutoff, x: null, dx: 0, t: 0 }); }
+  static alpha(cutoff, dt) { const tau = 1 / (2 * Math.PI * cutoff); return 1 / (1 + tau / dt); }
+  filter(x, t) {
+    if (this.x === null) { this.x = x; this.t = t; return x; }
+    const dt = Math.max(1e-3, t - this.t); this.t = t;
+    this.dx += OneEuro.alpha(this.dCutoff, dt) * ((x - this.x) / dt - this.dx);
+    const cutoff = this.minCutoff + this.beta * Math.abs(this.dx);
+    this.x += OneEuro.alpha(cutoff, dt) * (x - this.x);
+    return this.x;
+  }
+}
+const STABILITY = { minCutoff: 0.5, beta: 0.004 }; // minCutoff küçüldükçe daha durgun, beta büyüdükçe daha çevik
+const newHandFilter = () => ({ x: new OneEuro(STABILITY.minCutoff, STABILITY.beta), y: new OneEuro(STABILITY.minCutoff, STABILITY.beta), pinchVotes: 0, raw: null });
+const handFilters = [newHandFilter(), newHandFilter()];
+
+function readHands() {
+  if (!camOn || !landmarker || video.readyState < 2 || video.currentTime === lastVideoTime) return;
+  lastVideoTime = video.currentTime;
+  let lms = (landmarker.detectForVideo(video, performance.now()).landmarks || []).slice(0, 2);
+  // İki el varsa sıra kareden kareye değişebilir: önceki konumlara en yakın eşleşmeyi koru
+  if (lms.length === 2 && handFilters[0].raw && handFilters[1].raw) {
+    const d = (lm, f) => Math.hypot(lm[0].x - f.raw.x, lm[0].y - f.raw.y);
+    if (d(lms[0], handFilters[1]) + d(lms[1], handFilters[0]) < d(lms[0], handFilters[0]) + d(lms[1], handFilters[1])) lms = [lms[1], lms[0]];
+  }
+  const t = performance.now() / 1000;
+  for (let h = 0; h < 2; h++) {
+    const lm = lms[h];
+    if (!lm) { hands[h] = null; handFilters[h] = newHandFilter(); continue; }
+    const f = handFilters[h];
+    f.raw = { x: lm[0].x, y: lm[0].y };
+    const thumb = lm[4], index = lm[8], knuckle = lm[5];
+    // Sabit referans noktası: iki parmak ucu + işaret parmağı kökü.
+    // Pinch açılıp kapanırken iki uç simetrik yaklaştığı için nokta zıplamaz.
+    const nx = thumb.x * 0.35 + index.x * 0.35 + knuckle.x * 0.3;
+    const ny = thumb.y * 0.35 + index.y * 0.35 + knuckle.y * 0.3;
+    const sp = videoToScreen(nx, ny);
+    const x = f.x.filter(sp.x, t), y = f.y.filter(sp.y, t);
+    // Pinch: histerezis + durum değişikliği için 2 kare onay (titrek tıklamaları önler)
+    const size = Math.hypot(lm[0].x - lm[9].x, lm[0].y - lm[9].y) || 0.1;
+    const ratio = Math.hypot(thumb.x - index.x, thumb.y - index.y) / size;
+    const was = !!hands[h]?.pinch;
+    const want = was ? ratio < 0.45 : ratio < 0.32;
+    f.pinchVotes = want !== was ? f.pinchVotes + 1 : 0;
+    const pinch = f.pinchVotes >= 2 ? want : was;
+    if (f.pinchVotes >= 2) f.pinchVotes = 0;
+    hands[h] = { x, y, pinch };
+  }
+}
+
+let drag = null;
+canvas.addEventListener("pointerdown", (e) => {
+  unlockAudio();
+  drag = { id: e.pointerId, x0: e.clientX, t0: performance.now(), s0: S.steer, moved: false };
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener("pointermove", (e) => {
+  if (!drag || e.pointerId !== drag.id) return;
+  const dx = e.clientX - drag.x0;
+  if (Math.abs(dx) > 8) drag.moved = true;
+  if (drag.moved) S.steer = clamp(drag.s0 + dx / (innerWidth * 0.3), -1, 1);
+});
+const endDrag = (e) => {
+  if (!drag || e.pointerId !== drag.id) return;
+  if (!drag.moved && performance.now() - drag.t0 < 350 && e.type === "pointerup") jump();
+  drag = null;
+};
+canvas.addEventListener("pointerup", endDrag);
+canvas.addEventListener("pointercancel", endDrag);
+document.addEventListener("pointerdown", unlockAudio);
+
+addEventListener("keydown", (e) => {
+  unlockAudio();
+  const k = e.key;
+  if (k === "ArrowLeft" || k === "a" || k === "A") kbAxis = -1;
+  else if (k === "ArrowRight" || k === "d" || k === "D") kbAxis = 1;
+  else if (k === " " || k === "ArrowUp" || k === "w" || k === "W") { e.preventDefault(); if (!e.repeat) jump(); }
+  else if (k === "Enter" && (S.mode === "menu" || S.mode === "end")) start();
+  else if (k === "p" || k === "P") (S.mode === "play" ? pause : resume)();
+  else return;
+  if (k.startsWith("Arrow")) e.preventDefault();
+});
+addEventListener("keyup", (e) => {
+  const k = e.key;
+  if ((k === "ArrowLeft" || k === "a" || k === "A") && kbAxis < 0) kbAxis = 0;
+  if ((k === "ArrowRight" || k === "d" || k === "D") && kbAxis > 0) kbAxis = 0;
+});
+document.addEventListener("visibilitychange", () => { if (document.hidden) pause(); });
+
+const cursor = $("cur0");
+let prevPinch = false;
+function handControl() {
+  const h = hands[0] || hands[1];
+  if (!h) { prevPinch = false; cursor.style.display = "none"; return; }
+  cursor.style.display = "block"; cursor.style.left = h.x + "px"; cursor.style.top = h.y + "px";
+  cursor.classList.toggle("pinch", h.pinch);
+  if (S.mode !== "paused") {
+    // El yatay konumu = direksiyon (küçük ölü bölge, kenarlara kadar gitmek gerekmez)
+    const n = (h.x / innerWidth - 0.5) * 2, m = Math.max(0, Math.abs(n) - 0.07) / 0.93;
+    S.steer = clamp(Math.sign(n) * m * 1.35, -1, 1);
+  }
+  if (h.pinch && !prevPinch) {
+    // Oyun sırasında pinch = zıpla + korna; menülerde pinch ile düğmelere de basılabilir
+    const btn = S.mode !== "play" && document.elementFromPoint(h.x, h.y)?.closest("button");
+    if (btn) btn.click(); else { unlockAudio(); jump(); snd.horn(); }
+  }
+  prevPinch = h.pinch;
+}
+
+let last = performance.now();
+function loop(now) {
+  requestAnimationFrame(loop);
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  if (camOn) readHands();
+  handControl();
+  advance(dt); updateUI(); render();
+}
+
+// ---------------------------------------------------------------------------
+// Başlat + test kancaları
+// ---------------------------------------------------------------------------
+setVehicle("car"); setColor(COLORS[0]); setTarget("red", false); setLamps(); resize(); updateUI();
+window.__araba = {
+  THREE, scene, camera,
+  get state() { return S; },
+  start, stop, pause, resume, finish: endRound,
+  setSteer(v) { S.steer = clamp(+v || 0, -1, 1); },
+  jump, horn: () => snd.horn(),
+  step, render,
+  setVehicle, setColor, setEasy, setSound, setTarget: (k) => setTarget(ALIAS[k] || k, false),
+  setAuto(b) { S.auto = !!b; },
+  spawn(type, lane = 1, z = SPAWN_Z) { return !!spawnItem(type, lane, z); },
+  items() { return ALL.filter((i) => i.active).map((i) => ({ type: i.type, lane: Math.round(i.x / LANE_W) + 1, x: i.x, z: i.z, done: i.done })); },
+};
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
